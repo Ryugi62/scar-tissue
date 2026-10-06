@@ -8,22 +8,333 @@
  "signatures_repeated_3plus": 321,
  "scars": 193,
  "root_cause_scars": 17,
- "guard_rules": 12,
- "demoted_by_self_validation": 6,
+ "guard_rules": 11,
+ "demoted_by_self_validation": 7,
  "already_guarded": 0,
- "recoveries_learned": 86,
+ "recoveries_learned": 84,
  "bash_failures": 23520,
- "bash_failures_matched_by_rules": 525,
+ "bash_failures_exit_nonzero": 23520,
+ "bash_failures_matched_by_rules": 524,
+ "bash_failures_matched_exit_nonzero": 524,
  "bash_successes": 31440,
- "bash_successes_blocked": 6,
- "_meta": {
-  "command": "scar stats swe_sample.jsonl --format swe-agent",
-  "run": "2026-10-06 15:34 KST",
-  "data": "2,000 rows of huggingface.co/datasets/nebius/SWE-agent-trajectories (CC-BY-4.0): 100 rows at each offset 0, 4000, \u2026, 76000 via the datasets-server rows API"
+ "bash_successes_blocked": 9,
+ "rules": [
+  {
+   "id": "bash-snapcraft-missing-command",
+   "signature": "Bash:snapcraft:missing-command",
+   "sessions": 13,
+   "matched_failures": 163,
+   "matched_exit_nonzero": 163,
+   "matched_silent": 0,
+   "successes_blocked": 8,
+   "recoveries": 0
+  },
+  {
+   "id": "bash-find-dvc-missing-command",
+   "signature": "Bash:find.dvc:missing-command",
+   "sessions": 4,
+   "matched_failures": 163,
+   "matched_exit_nonzero": 163,
+   "matched_silent": 0,
+   "successes_blocked": 0,
+   "recoveries": 3
+  },
+  {
+   "id": "bash-cd-dvc-missing-command",
+   "signature": "Bash:cd.dvc:missing-command",
+   "sessions": 3,
+   "matched_failures": 98,
+   "matched_exit_nonzero": 98,
+   "matched_silent": 0,
+   "successes_blocked": 0,
+   "recoveries": 0
+  },
+  {
+   "id": "bash-search-missing-command",
+   "signature": "Bash:search:missing-command",
+   "sessions": 3,
+   "matched_failures": 70,
+   "matched_exit_nonzero": 70,
+   "matched_silent": 0,
+   "successes_blocked": 0,
+   "recoveries": 67
+  },
+  {
+   "id": "bash-edit-n-n-timeout",
+   "signature": "Bash:edit N:N:timeout",
+   "sessions": 15,
+   "matched_failures": 0,
+   "matched_exit_nonzero": 0,
+   "matched_silent": 0,
+   "successes_blocked": 0,
+   "recoveries": 11
+  },
+  {
+   "id": "bash-close-missing-command",
+   "signature": "Bash:close:missing-command",
+   "sessions": 4,
+   "matched_failures": 8,
+   "matched_exit_nonzero": 8,
+   "matched_silent": 0,
+   "successes_blocked": 0,
+   "recoveries": 0
+  },
+  {
+   "id": "bash-create-env-missing-command",
+   "signature": "Bash:create.env:missing-command",
+   "sessions": 2,
+   "matched_failures": 7,
+   "matched_exit_nonzero": 7,
+   "matched_silent": 0,
+   "successes_blocked": 0,
+   "recoveries": 0
+  },
+  {
+   "id": "bash-mysql-missing-command",
+   "signature": "Bash:mysql:missing-command",
+   "sessions": 4,
+   "matched_failures": 5,
+   "matched_exit_nonzero": 5,
+   "matched_silent": 0,
+   "successes_blocked": 1,
+   "recoveries": 0
+  },
+  {
+   "id": "bash-next-issue-missing-command",
+   "signature": "Bash:next_issue:missing-command",
+   "sessions": 2,
+   "matched_failures": 4,
+   "matched_exit_nonzero": 4,
+   "matched_silent": 0,
+   "successes_blocked": 0,
+   "recoveries": 0
+  },
+  {
+   "id": "bash-less-missing-command",
+   "signature": "Bash:less:missing-command",
+   "sessions": 2,
+   "matched_failures": 3,
+   "matched_exit_nonzero": 3,
+   "matched_silent": 0,
+   "successes_blocked": 0,
+   "recoveries": 1
+  },
+  {
+   "id": "bash-unzip-missing-command",
+   "signature": "Bash:unzip:missing-command",
+   "sessions": 3,
+   "matched_failures": 3,
+   "matched_exit_nonzero": 3,
+   "matched_silent": 0,
+   "successes_blocked": 0,
+   "recoveries": 2
+  }
+ ],
+ "failure_cost": {
+  "bash-snapcraft-missing-command": {
+   "matched": 163,
+   "recovered": 2,
+   "median_calls_to_fix": 2.0,
+   "median_seconds_to_fix": null,
+   "silent_never_fixed": 0
+  },
+  "bash-find-dvc-missing-command": {
+   "matched": 163,
+   "recovered": 10,
+   "median_calls_to_fix": 3.0,
+   "median_seconds_to_fix": null,
+   "silent_never_fixed": 0
+  },
+  "bash-cd-dvc-missing-command": {
+   "matched": 98,
+   "recovered": 0,
+   "median_calls_to_fix": null,
+   "median_seconds_to_fix": null,
+   "silent_never_fixed": 0
+  },
+  "bash-search-missing-command": {
+   "matched": 70,
+   "recovered": 67,
+   "median_calls_to_fix": 1,
+   "median_seconds_to_fix": null,
+   "silent_never_fixed": 0
+  },
+  "bash-edit-n-n-timeout": {
+   "matched": 0,
+   "recovered": 0,
+   "median_calls_to_fix": null,
+   "median_seconds_to_fix": null,
+   "silent_never_fixed": 0
+  },
+  "bash-close-missing-command": {
+   "matched": 8,
+   "recovered": 0,
+   "median_calls_to_fix": null,
+   "median_seconds_to_fix": null,
+   "silent_never_fixed": 0
+  },
+  "bash-create-env-missing-command": {
+   "matched": 7,
+   "recovered": 0,
+   "median_calls_to_fix": null,
+   "median_seconds_to_fix": null,
+   "silent_never_fixed": 0
+  },
+  "bash-mysql-missing-command": {
+   "matched": 5,
+   "recovered": 1,
+   "median_calls_to_fix": 5,
+   "median_seconds_to_fix": null,
+   "silent_never_fixed": 0
+  },
+  "bash-next-issue-missing-command": {
+   "matched": 4,
+   "recovered": 0,
+   "median_calls_to_fix": null,
+   "median_seconds_to_fix": null,
+   "silent_never_fixed": 0
+  },
+  "bash-less-missing-command": {
+   "matched": 3,
+   "recovered": 3,
+   "median_calls_to_fix": 1,
+   "median_seconds_to_fix": null,
+   "silent_never_fixed": 0
+  },
+  "bash-unzip-missing-command": {
+   "matched": 3,
+   "recovered": 2,
+   "median_calls_to_fix": 2.0,
+   "median_seconds_to_fix": null,
+   "silent_never_fixed": 0
+  }
  },
- "_examples": [
-  "`edit` introduced a syntax error   6,212\u00d7 in 968 runs",
-  "`cd..` typed without a space       979\u00d7 in 25 runs",
-  "`ls.dvc` typed without a space   1,214\u00d7 in 6 runs"
- ]
+ "demoted": [
+  {
+   "signature": "Bash:ls.dvc:missing-command",
+   "failures": 1214,
+   "sessions": 6,
+   "would_block_successes": 3,
+   "blocks_own_fix": 3
+  },
+  {
+   "signature": "Bash:cd..:missing-command",
+   "failures": 987,
+   "sessions": 25,
+   "would_block_successes": 3,
+   "blocks_own_fix": 3
+  },
+  {
+   "signature": "Bash:ls.git:missing-command",
+   "failures": 629,
+   "sessions": 2,
+   "would_block_successes": 1,
+   "blocks_own_fix": 1
+  },
+  {
+   "signature": "Bash:ls..:missing-command",
+   "failures": 378,
+   "sessions": 2,
+   "would_block_successes": 1,
+   "blocks_own_fix": 1
+  },
+  {
+   "signature": "Bash:find.:missing-command",
+   "failures": 351,
+   "sessions": 23,
+   "would_block_successes": 1,
+   "blocks_own_fix": 1
+  },
+  {
+   "signature": "Bash:sqlglot:missing-command",
+   "failures": 7,
+   "sessions": 4,
+   "would_block_successes": 111,
+   "blocks_own_fix": 2
+  },
+  {
+   "signature": "Bash:from:missing-command",
+   "failures": 4,
+   "sessions": 3,
+   "would_block_successes": 1866,
+   "blocks_own_fix": 1
+  }
+ ],
+ "top_scars": [
+  {
+   "signature": "Bash:edit N:N:error",
+   "failures": 6772,
+   "corrections": 0,
+   "sessions": 968,
+   "guard": false
+  },
+  {
+   "signature": "Bash:search_dir:error",
+   "failures": 1415,
+   "corrections": 0,
+   "sessions": 280,
+   "guard": false
+  },
+  {
+   "signature": "Bash:ls.dvc:missing-command",
+   "failures": 1214,
+   "corrections": 0,
+   "sessions": 6,
+   "guard": false
+  },
+  {
+   "signature": "Bash:python reproduce.py:error",
+   "failures": 1089,
+   "corrections": 0,
+   "sessions": 313,
+   "guard": false
+  },
+  {
+   "signature": "Bash:cd..:missing-command",
+   "failures": 987,
+   "corrections": 0,
+   "sessions": 25,
+   "guard": false
+  },
+  {
+   "signature": "Bash:find_file:error",
+   "failures": 837,
+   "corrections": 0,
+   "sessions": 242,
+   "guard": false
+  },
+  {
+   "signature": "Bash:search_file:error",
+   "failures": 825,
+   "corrections": 0,
+   "sessions": 259,
+   "guard": false
+  },
+  {
+   "signature": "Bash:ls.git:missing-command",
+   "failures": 629,
+   "corrections": 0,
+   "sessions": 2,
+   "guard": false
+  },
+  {
+   "signature": "Bash:python reproduce_bug.py:error",
+   "failures": 398,
+   "corrections": 0,
+   "sessions": 90,
+   "guard": false
+  },
+  {
+   "signature": "Bash:ls..:missing-command",
+   "failures": 378,
+   "corrections": 0,
+   "sessions": 2,
+   "guard": false
+  }
+ ],
+ "_meta": {
+  "command": "scar stats rows.jsonl --format swe-agent",
+  "run": "2026-10-06 16:08 KST",
+  "data": "2,000 rows of huggingface.co/datasets/nebius/SWE-agent-trajectories (CC-BY-4.0): 100 rows at offsets 0, 4000, \u2026, 76000"
+ }
 }

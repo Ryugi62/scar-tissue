@@ -2,7 +2,8 @@
 import json, os, subprocess, sys, tempfile, time, unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-from scar_tissue.domain import Event, detect, compile_rule, rule_matches, signature, shell_view, error_class, template_principle
+from scar_tissue.domain import Event, detect, compile_rule, rule_matches, signature, error_class, template_principle
+from scar_tissue.shell import parse
 from scar_tissue import application
 from scar_tissue.adapters import jsonl
 
@@ -61,10 +62,10 @@ class RootCause(unittest.TestCase):
     def test_permission_denied_is_already_guarded(self):
         self.assertEqual(error_class("Permission to use Bash with command git push origin main has been denied."), "blocked")
 
-    def test_shell_view_blanks_quotes_heredocs(self):
-        v = shell_view("echo 'a == b' \"=== x\" && cat <<EOF\n=== body\nEOF\necho ok")
-        self.assertNotIn("==", v)
-        self.assertIn("echo ok", v)
+    def test_tokenizer_hides_quotes_and_heredocs(self):
+        cs = parse("echo 'a == b' \"=== x\" && cat <<EOF\n=== body\nEOF\necho ok")
+        self.assertFalse(any(c.unquoted_equals_word(i) for c in cs for i in range(len(c.words))))
+        self.assertEqual(list(cs[-1].words), ["echo", "ok"])
 
 
 class Recovery(unittest.TestCase):
@@ -147,8 +148,8 @@ class SilentFailures(unittest.TestCase):
         self.assertEqual([s for s in application.scan(ev) if s.error_class == "missing-command"], [])
 
     def test_long_command_is_fast(self):
-        ev = [E("s1", "git push --force origin main", "ok", kind="tool_ok"), Event("t", "s1", "user_correction", "human", "", "no, stop"),
-              E("s2", "git push --force", "ok", kind="tool_ok"), Event("t", "s2", "user_correction", "human", "", "stop that")]
+        ev = [E("s1", "git push --force origin main", "ok", kind="tool_ok"), Event("t", "s1", "user_correction", "human", "", "no, stop the force push"),
+              E("s2", "git push --force", "ok", kind="tool_ok"), Event("t", "s2", "user_correction", "human", "", "stop force pushing")]
         sc, r = rule_for(ev, "Bash:git push:corrected")
         big = "echo x " * 20000
         t = time.time(); rule_matches(r, "Bash", {"command": big}); self.assertLess(time.time() - t, 0.05)

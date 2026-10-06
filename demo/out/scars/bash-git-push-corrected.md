@@ -1,10 +1,10 @@
 # Scar: git push (corrected)
 
-**Principle.** Avoid force-pushing main; use a normal push or open a pull request instead.
+**Principle.** Avoid `git push --force` here — it was corrected by the human 2×. The human said: "stop force pushing, I told you yesterday". Use the safer alternative, or ask first.
 
 **Signature.** `Bash:git push:corrected` — 0 failures, 2 corrections, 2 sessions.
 
-**Guard.** PreToolUse rule `bash-git-push-corrected` blocks `Bash` calls matching `^(?=[\s\S]*\s\-\-force(?:\s|$))[\s\S]*?(?:^|[;&|(!{]\s*|\n\s*|\b(?:do|then|else|until|while|if|time|sudo|env|nohup|exec)\s+)git\s+push(?=\s|$)`.
+**Guard.** PreToolUse rule `bash-git-push-corrected` blocks Bash calls with `git push --force`.
 
 ## Evidence
 - 2026-10-01T10:01 · session `s1` · user_correction · `no, never force-push main`

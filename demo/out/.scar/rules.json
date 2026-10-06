@@ -3,13 +3,21 @@
   {
    "id": "bash-pgrep-f-timeout",
    "tool": "Bash",
-   "pattern": "(?:^|[;&|(!{]\\s*|\\n\\s*|\\b(?:do|then|else|until|while|if|time|sudo|env|nohup|exec)\\s+)pgrep\\s+\\-f[A-Za-z]?(?=\\s|$)",
-   "view": "raw",
-   "unless": [
-    "\\bfor\\s+\\w+\\s+in\\s+(?:\\{\\d+\\.\\.\\d+\\}|\\$\\(seq\\b)",
-    "-f\\s+['\\\"]?\\[[^\\]]+\\]"
+   "kind": "head",
+   "head": [
+    "pgrep",
+    "-f"
    ],
-   "message": "Avoid long-running `pgrep -f` polling loops that time out; instead check once, use a bounded retry loop with short sleeps, or wait on the process directly. Worked before: `for i in $(seq 1 60); do pgrep -f '[b]uild.py' >/dev/null || break; sleep 5; done`",
+   "flags": [],
+   "context": "loop",
+   "unless": {
+    "markers": [
+     "\\bfor\\s+\\w+\\s+in\\s+(?:\\{\\d+\\.\\.\\d+\\}|\\$\\(seq\\b)",
+     "-f\\s+['\\\"]?\\[[^\\]]+\\]"
+    ],
+    "flags": []
+   },
+   "message": "`pgrep -f` ran until the tool timeout 4× across 3 sessions — bound the wait: a fixed retry count or a time limit. Worked before: `for i in $(seq 1 60); do pgrep -f '[b]uild.py' >/dev/null || break; sleep 5; done`",
    "evidence": {
     "failures": 4,
     "corrections": 0,
@@ -20,10 +28,20 @@
   {
    "id": "bash-git-push-corrected",
    "tool": "Bash",
-   "pattern": "^(?=[\\s\\S]*\\s\\-\\-force(?:\\s|$))[\\s\\S]*?(?:^|[;&|(!{]\\s*|\\n\\s*|\\b(?:do|then|else|until|while|if|time|sudo|env|nohup|exec)\\s+)git\\s+push(?=\\s|$)",
-   "view": "raw",
-   "unless": [],
-   "message": "Avoid force-pushing main; use a normal push or open a pull request instead.",
+   "kind": "head",
+   "head": [
+    "git",
+    "push"
+   ],
+   "flags": [
+    "--force"
+   ],
+   "context": null,
+   "unless": {
+    "markers": [],
+    "flags": []
+   },
+   "message": "Avoid `git push --force` here — it was corrected by the human 2×. The human said: \"stop force pushing, I told you yesterday\". Use the safer alternative, or ask first.",
    "evidence": {
     "failures": 0,
     "corrections": 2,
@@ -34,10 +52,12 @@
   {
    "id": "bash-word-zsh-equals",
    "tool": "Bash",
-   "pattern": "(?:^|\\s)=[^\\s(]\\S*",
-   "view": "shell",
-   "unless": [],
-   "message": "This shell is zsh: an unquoted word starting with `=` (`===`, `[ a == b ]`) is expanded as a command path and fails — quote it or use `[[ … ]]` (failed 3× (zsh-equals) across 2 sessions). Worked before: `make build && echo \"=== Build done ===\"`",
+   "kind": "zsh-equals",
+   "unless": {
+    "markers": [],
+    "flags": []
+   },
+   "message": "This shell is zsh: an unquoted word starting with `=` (`===`, `[ a == b ]`) is expanded as a command path and fails — quote it or use `[[ … ]]` (failed 3× (zsh-equals) across 2 sessions). Worked before: `echo \"=== Build done ===\"`",
    "evidence": {
     "failures": 3,
     "corrections": 0,
@@ -48,9 +68,12 @@
   {
    "id": "bash-timeout-missing-command",
    "tool": "Bash",
-   "pattern": "(?:^|[;&|(!{]\\s*|\\n\\s*|\\b(?:do|then|else|until|while|if|time|sudo|env|nohup|exec)\\s+)timeout(?=\\s|$)",
-   "view": "shell",
-   "unless": [],
+   "kind": "missing-command",
+   "name": "timeout",
+   "unless": {
+    "markers": [],
+    "flags": []
+   },
    "message": "`timeout` is not installed on this machine (failed 3× (missing-command) across 2 sessions). Worked before: `perl -e 'alarm 60; exec @ARGV' npm test`",
    "evidence": {
     "failures": 3,

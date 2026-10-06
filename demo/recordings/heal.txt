@@ -1,0 +1,5 @@
+  ✚ rule bash-pgrep-f-timeout: `pgrep -f` ran until the tool timeout 4× across 3 sessions — bound the wait: a fixed retry count or a time limit. Worked before: `for i in $(seq 1 60); do pgrep -f '[b]uild.py' >/dev/null || break; sleep 5; done`
+  ✚ rule bash-git-push-corrected: Avoid `git push --force` here — it was corrected by the human 2×. The human said: "stop force pushing, I told you yesterday". Use the safer alternative, or ask first.
+  ✚ rule bash-word-zsh-equals: This shell is zsh: an unquoted word starting with `=` (`===`, `[ a == b ]`) is expanded as a command path and fails — quote it or use `[[ … ]]` (failed 3× (zsh-equals) across 2 sessions). Worked before: `echo "=== Build done ==="`
+  ✚ rule bash-timeout-missing-command: `timeout` is not installed on this machine (failed 3× (missing-command) across 2 sessions). Worked before: `perl -e 'alarm 60; exec @ARGV' npm test`
+wrote 5 scars → demo/out/scars/ and 4 guard rules → demo/out/.scar/rules.json

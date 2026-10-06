@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from functools import lru_cache
 from dataclasses import dataclass, field
+from .shell import parse
 from collections import defaultdict
 
 FAIL_THRESHOLD = 3          # same failure ≥3 times …
@@ -20,7 +21,7 @@ ERROR_CLASSES = [  # (class, regex on error text) — first match wins
 ]
 CORRECTION_PAT = re.compile(
     r"^(no[,.! ]|stop\b|don'?t\b|do not\b|why did you|again\?|wrong\b|undo\b|never\b)"
-    r"|^(아니[,. ]|하지 ?마|왜 또|멈춰|그만|틀렸|하지 말라고)", re.I)
+    r"|^(하지 ?마|왜 또|멈춰|그만|틀렸|하지 말라고)|^아니[,. ]+(그거|그렇게|이거|그만|하지|왜|틀)", re.I)
 GENERIC_FIRST = {"python3", "python", "node", "bash", "sh", "zsh", "sed", "grep", "rg", "echo", "cat", "ls", "head", "tail", "wc",
                  "mkdir", "rm", "cp", "mv", "find", "cd", "touch", "printf", "awk", "jq", "sort", "diff"}
 GENERIC_HEADS = {"python3", "python", "node", "bash", "sh", "zsh", "sed", "grep", "echo", "cat", "ls", "head", "tail",
@@ -32,8 +33,6 @@ _ROOT_CAUSES = [   # (class, regex on error text) — the cause is in the error,
     ("zsh-equals", re.compile(r"(?:\(eval\)|zsh):\d+: (=+)\S* not found")),
     ("zsh-nomatch", re.compile(r"no matches found: (\S+)")),
 ]
-# command position: start of a simple command (after a separator, a shell keyword, or a newline)
-CMD_POS = r"(?:^|[;&|(!{]\s*|\n\s*|\b(?:do|then|else|until|while|if|time|sudo|env|nohup|exec)\s+)"
 # the shapes a fix usually takes — learned per scar only if a recovery has the marker and no failure does
 REMEDY_MARKERS = {
     "bounded-loop": r"\bfor\s+\w+\s+in\s+(?:\{\d+\.\.\d+\}|\$\(seq\b)",
@@ -68,16 +67,6 @@ def silent_root_cause(text: str):
     """A call that exited 0 can still have failed part-way: only a shell-prefixed error line counts (`(eval):1: …`, `zsh:3: …`)."""
     lines = "\n".join(SHELL_ERR.findall(text or ""))
     return root_cause(lines) if lines else None
-
-
-@lru_cache(maxsize=65536)
-def shell_view(cmd: str) -> str:
-    """The words the shell actually parses: heredoc bodies, quoted strings, comments, [[ ]] and (( )) blanked."""
-    s = re.sub(r"<<-?\s*(['\"]?)(\w+)\1([^\n]*)\n(?:.*?\n)?[ \t]*\2[ \t]*(?=\n|$)", r"<<H\3", cmd or "", flags=re.S)
-    s = re.sub(r"\$?'[^']*'|\"(?:\\.|[^\"\\])*\"", "Q", s)
-    s = re.sub(r"(?:(?<=\s)|^)#[^\n]*", "", s, flags=re.M)
-    s = re.sub(r"\[\[.*?\]\]", "[[ ]]", s)
-    return re.sub(r"\$?\(\(.*?\)\)", "(( ))", s)
 
 
 @dataclass(frozen=True)
@@ -183,9 +172,25 @@ def signature(ev: Event) -> tuple[str, str, str]:
     return ev.tool, head, error_class(ev.text)
 
 
+NOT_CORRECTION = re.compile(r"^(no (worries|problem|need|thanks)|never ?mind|don'?t (forget|worry)|no, (it'?s )?(fine|ok|good))"
+                            r"|^아니 ?(괜찮|됐어|좋아)", re.I)
+
+
 def is_correction(text: str) -> bool:
     t = (text or "").strip()
-    return len(t) <= 280 and bool(CORRECTION_PAT.search(t))
+    return len(t) <= 280 and bool(CORRECTION_PAT.search(t)) and not NOT_CORRECTION.search(t)
+
+
+def _mentioned_head(command: str, said: str):
+    """The head of the simple command the human's message talks about (shares a word ≥3 letters with its name, subcommand
+    or flags), or None — a "no" that names nothing in the call is not pinned on it."""
+    said = (said or "").lower()
+    for c in parse(command):
+        words = {w.lower().lstrip("-") for w in c.words[:1] + tuple(x for x in c.words[1:2] if not x.startswith("-"))
+                 + tuple(x for x in c.words if x.startswith("-"))}
+        if any(len(w) >= 3 and w.isascii() and w in said for w in words):
+            return command_head(c.text)
+    return None
 
 
 def detect(events: list[Event]) -> list[Scar]:
@@ -217,9 +222,10 @@ def detect(events: list[Event]) -> list[Scar]:
                 failed[key, command_head(ev.command)] = ev.command
         elif ev.kind == "user_correction":
             prev = last_call.get(ev.session)
-            if prev is None:
+            head = _mentioned_head(prev.command, ev.text) if prev is not None else None
+            if head is None:
                 continue
-            tool, head, ec = signature(prev)
+            tool, _, ec = signature(prev)
             if prev.kind == "tool_ok":
                 ec = "corrected"
             key = f"{tool}:{head}:{ec}"
@@ -273,67 +279,188 @@ def validate_against_history(scars, events, max_rate=0.005, max_count=3):
     return report
 
 
-def _unless(scar: Scar) -> list:
-    """Exemptions learned from recoveries: remedy markers and flags a recovery has and no failure has."""
+def _unless(scar: Scar) -> dict:
+    """Exemptions learned from recoveries: remedy markers and flags a recovery's matching command has and no failure has."""
     fails = [e.command for e in scar.failures + scar.corrected_calls if e.command]
     recs = [e.command for e in scar.recoveries if e.command]
-    out = []
-    for pat in REMEDY_MARKERS.values():
-        if any(re.search(pat, r) for r in recs) and not any(re.search(pat, f) for f in fails):
-            out.append(pat)
+    out = {"markers": [], "flags": []}
     if scar.error_class in ROOT_CAUSE_CLASSES:     # root-cause rules match the cause itself; unrelated flags are not a fix
         return out
+    for pat in REMEDY_MARKERS.values():
+        if any(re.search(pat, r) for r in recs) and not any(re.search(pat, f) for f in fails):
+            out["markers"].append(pat)
     fail_flags = {t for f in fails for t in f.split() if t.startswith("-")}
-    for flag in sorted({t for r in recs for t in r.split() if re.match(r"^--?[A-Za-z][\w-]*$", t)} - fail_flags):
-        out.append(r"(?:^|\s)" + re.escape(flag) + r"(?=[\s=]|$)")
+    out["flags"] = sorted({t for r in recs for t in r.split() if re.match(r"^--?[A-Za-z][\w-]*$", t)} - fail_flags)
     return out
 
 
-def compile_rule(scar: Scar, principle: str) -> dict:
-    """A rule that matches the tool input of the failing calls. Root-cause scars match the shell view; head scars match the
-    command head at command position (+ the flags every example shares). Exemptions (`unless`) come from the agent's own fixes."""
-    view = "raw"
-    if scar.error_class == "missing-command":
-        pat, view = CMD_POS + re.escape(scar.head) + r"(?=\s|$)", "shell"
+def _head_context(scar: Scar, head: list) -> str | None:
+    """`loop` if every failing example ran the head inside an unbounded while/until loop (the habit is the wait, not the tool)."""
+    probe = {"kind": "head", "tool": scar.tool, "head": head, "flags": [], "context": None, "unless": {}}
+    seen = []
+    for e in scar.failures + scar.corrected_calls:
+        cs = [c for c in parse(e.command) if _head_hit(probe, c)]
+        if cs:
+            seen.append(any(c.loop in ("while", "until") for c in cs))
+    return "loop" if seen and all(seen) else None
+
+
+def fix_excerpt(scar: Scar, recovery: str, limit: int = 120):
+    """The one simple command in a recovery that carries the fix (e.g. the quoted `--include='*.md'`), or None."""
+    cs = parse(recovery)
+    if scar.error_class == "zsh-nomatch":
+        pre = None if scar.head == "glob" else scar.head[:-1]
+        hit = [c for c in cs if any((pre is None or w.startswith(pre)) and any(ch in "*?" for ch in w) and not c.unquoted_glob(i)
+                                    for i, w in enumerate(c.words[1:], 1))]
     elif scar.error_class == "zsh-equals":
-        pat, view = r"(?:^|\s)=[^\s(]\S*", "shell"      # zsh expands an unquoted `=word` to a command path (`==`, `===`)
+        hit = [c for c in cs if any(len(w) >= 2 and w[0] == "=" and not c.unquoted_equals_word(i) for i, w in enumerate(c.words))]
+    elif scar.error_class == "missing-command":
+        failed = {w for e in scar.failures for c in parse(e.command) for w in c.words if scar.head in c.words}
+        hit = sorted((c for c in cs if scar.head not in c.words and len(failed & set(c.words)) >= 2),
+                     key=lambda c: -len(failed & set(c.words)))
+    else:   # a head habit's fix is the whole call (e.g. the bounded loop around pgrep), minus a leading `cd …` hop
+        probe = {"kind": "head", "tool": scar.tool, "head": scar.head.split(), "flags": [], "context": None}
+        if not any(_head_hit(probe, c) for c in cs):
+            return None
+        return re.sub(r"^\s*cd\s+\S+\s*(&&|;)\s*", "", recovery).split("\n")[0][:limit]
+    return hit[0].text[:limit] if hit else None
+
+
+def compile_rule(scar: Scar, principle: str) -> dict:
+    """A structured rule, matched per simple command by the shell tokenizer (scar_tissue.shell): root-cause rules look at
+    the words zsh actually sees; head rules at the command name, subcommand and required flags (aliases and clusters too)."""
+    base = {"id": scar.slug, "tool": scar.tool}
+    if scar.error_class == "missing-command":
+        rule = {**base, "kind": "missing-command", "name": scar.head}
+    elif scar.error_class == "zsh-equals":
+        rule = {**base, "kind": "zsh-equals"}
     elif scar.error_class == "zsh-nomatch":
-        lead = re.escape(scar.head[:-1]) if scar.head != "glob" else r"[^\s=]*"
-        pat, view = r"(?:^|\s)" + lead + r"\S*[*?]", "shell"
+        rule = {**base, "kind": "zsh-nomatch", "prefix": None if scar.head == "glob" else scar.head[:-1]}
     else:
-        toks = scar.head.split()
-        parts = [re.escape(t) + (r"[A-Za-z]?" if re.match(r"^-[A-Za-z]$", t) else "") for t in toks]   # -s also matches -sL
-        pat = CMD_POS + r"\s+".join(parts) + r"(?=\s|$)"
-        examples = [e.command for e in scar.failures + scar.corrected_calls if e.command]
-        if examples:   # every example shares a flag beyond the head (e.g. --force) → require it; plain `git push` stays allowed
-            common = set.intersection(*[set(c.split()) for c in examples]) - set(toks)
-            flags = sorted(t for t in common if t.startswith("-"))
-            if flags:   # anchored at ^ so each lookahead runs once per command (not once per position)
-                pat = "^" + "".join(rf"(?=[\s\S]*\s{re.escape(f)}(?:\s|$))" for f in flags) + r"[\s\S]*?" + pat
-    rec = scar.recoveries[-1].command if scar.recoveries else ""
+        head = scar.head.split()
+        probe = {"kind": "head", "tool": scar.tool, "head": head, "flags": [], "context": None}
+        arg_sets = []
+        for e in scar.failures + scar.corrected_calls:   # flags of the simple command that ran the head, not the whole line
+            cs = [c for c in parse(e.command) if _head_hit(probe, c)]
+            if cs:
+                arg_sets.append({w for c in cs for w in c.words[1:]})
+        flags = []
+        if arg_sets:   # every example shares a flag beyond the head (e.g. --force) → require it; plain `git push` stays allowed
+            flags = sorted(t for t in set.intersection(*arg_sets) - set(head) if t.startswith("-"))
+        rule = {**base, "kind": "head", "head": head, "flags": flags, "context": _head_context(scar, head)}
+    rule["unless"] = _unless(scar)
+    rec = next((x for x in (fix_excerpt(scar, r.command) for r in reversed(scar.recoveries)
+                            if not rule_matches(rule, scar.tool, {"command": r.command})) if x), "")
     if rec and principle:
-        principle = principle.rstrip() + f" Worked before: `{rec[:160]}`"
-    return {"id": scar.slug, "tool": scar.tool, "pattern": pat, "view": view, "unless": _unless(scar), "message": principle,
-            "evidence": {"failures": len(scar.failures), "corrections": len(scar.corrections), "sessions": len(scar.sessions),
-                         "recoveries": len(scar.recoveries)}}
+        principle = principle.rstrip() + f" Worked before: `{rec}`"
+    rule["message"] = principle
+    rule["evidence"] = {"failures": len(scar.failures), "corrections": len(scar.corrections), "sessions": len(scar.sessions),
+                        "recoveries": len(scar.recoveries)}
+    return rule
 
 
-def _candidates(text: str) -> list:
-    """The command plus any `bash -c '…'` / `sh -lc "…"` payloads, so wrapped commands are checked too."""
-    return [text] + [m[1] for m in re.findall(r"\b(?:ba|z)?sh\s+-l?c\s+(['\"])(.*?)\1", text, re.S)]
+FLAG_ALIASES = {"--force": {"-f"}, "-f": {"--force"}, "--recursive": {"-r", "-R"}, "-r": {"--recursive"}}
+WRAPPERS = {"nice", "nohup", "time", "command", "builtin", "exec", "sudo", "env", "xargs", "timeout", "gtimeout", "stdbuf",
+            "caffeinate", "noglob", "doas"}
+_VALUE_OPTS = {"-n", "-I", "-L", "-P", "-s", "-u", "-k", "-C", "-c", "-o", "-e", "-i"}
+
+
+def _chain(words: tuple) -> tuple[list, int]:
+    """(wrapper words in front of the real command, index of the real command): `FOO=1 nice timeout 5 make` → ([nice, timeout], 4)."""
+    i, chain = 0, []
+    while i < len(words) and re.match(r"^[A-Za-z_]\w*=", words[i]):
+        i += 1
+    while i < len(words) and words[i].rsplit("/", 1)[-1] in WRAPPERS:
+        chain.append(words[i].rsplit("/", 1)[-1]); i += 1
+        while i < len(words) and (words[i].startswith("-") or re.match(r"^(\d+[smhd]?|[A-Za-z_]\w*=.*)$", words[i])):
+            i += 2 if words[i] in _VALUE_OPTS else 1
+    return chain, i
+
+
+def _has_flag(flag: str, args) -> bool:
+    names = {flag} | FLAG_ALIASES.get(flag, set())
+    short = {n[1] for n in names if re.match(r"^-[A-Za-z]$", n)}
+    for a in args:
+        if a in names or any(a.startswith(n + "=") for n in names if n.startswith("--")):
+            return True
+        if short and re.match(r"^-[A-Za-z]{2,}$", a) and short & set(a[1:]):
+            return True
+    return False
+
+
+def _head_hit(rule: dict, c) -> bool:
+    chain, k = _chain(c.words)
+    if k >= len(c.words) or c.words[k].rsplit("/", 1)[-1] != rule["head"][0]:
+        return False
+    args = list(c.words[k + 1:])
+    if len(rule["head"]) > 1:
+        sub = rule["head"][1]
+        if sub.startswith("-"):
+            if not _has_flag(sub, args):
+                return False
+        else:                                            # subcommand after global options: git -C dir push
+            j = 0
+            while j < len(args) and args[j].startswith("-"):
+                j += 2 if args[j] in _VALUE_OPTS else 1
+            if j >= len(args) or args[j] != sub:
+                return False
+            args = args[j + 1:]
+    if not all(_has_flag(f, args) for f in rule.get("flags", [])):
+        return False
+    if rule.get("context") == "loop" and c.loop not in ("while", "until"):
+        return False
+    return True
+
+
+def _command_hits(rule: dict, c) -> bool:
+    kind = rule.get("kind", "head")
+    if kind == "missing-command":
+        chain, k = _chain(c.words)
+        return rule["name"] in chain or (k < len(c.words) and c.words[k].rsplit("/", 1)[-1] == rule["name"])
+    if kind in ("zsh-equals", "zsh-nomatch"):
+        if c.shell != "zsh" or c.test:
+            return False
+        if kind == "zsh-equals":
+            return any(c.unquoted_equals_word(i) for i in range(len(c.words)))
+        pre = rule.get("prefix")
+        return any(c.unquoted_glob(i) and (pre is None or c.words[i].startswith(pre)) for i in range(1, len(c.words)))
+    if not _head_hit(rule, c):
+        return False
+    u = rule.get("unless") or {}
+    if any(re.search(m, c.text) for m in u.get("markers", [])):
+        return False
+    if any(_has_flag(f, c.words[1:]) for f in u.get("flags", [])):
+        return False
+    return True
+
+
+def describe(rule: dict) -> str:
+    k = rule.get("kind", "head")
+    if k == "missing-command":
+        return f"any command that runs `{rule['name']}` (also behind env/nice/xargs/command wrappers and inside $(…))"
+    if k == "zsh-equals":
+        return "an unquoted zsh word starting with `=` (`===`, `==`), outside [[ ]] / (( )) and outside bash -c payloads"
+    if k == "zsh-nomatch":
+        return f"an unquoted glob{' in `' + rule['prefix'] + '…`' if rule.get('prefix') else ''} in zsh"
+    s = "`" + " ".join(rule["head"] + rule.get("flags", [])) + "`" + (" inside an unbounded while/until loop" if rule.get("context") == "loop" else "")
+    u = rule.get("unless") or {}
+    if u.get("markers") or u.get("flags"):
+        s += f" — except the shape of the agent's own fix ({', '.join(u.get('flags', []) + [m for m in u.get('markers', [])])})"
+    return s
 
 
 def rule_matches(rule: dict, tool: str, tool_input: dict) -> bool:
     if rule.get("tool") != tool:
         return False
-    text = tool_input.get("command") or tool_input.get("url") or tool_input.get("file_path") or ""
-    for t in _candidates(text):
-        if any(re.search(u, t) for u in rule.get("unless", [])):
-            continue
-        if re.search(rule["pattern"], shell_view(t) if rule.get("view") == "shell" else t):
-            return True
-    return False
+    text = tool_input.get("command") or ""
+    return any(_command_hits(rule, c) for c in parse(text))
 
+
+ENV_FIX = {   # for the human: the one-line environment change that removes a root cause (Scar Tissue found that it is needed)
+    "zsh-equals": "`unsetopt EQUALS` in the zsh profile the agent's shell loads (makes `===` a plain word)",
+    "zsh-nomatch": "`setopt NO_NOMATCH` in that profile (unmatched globs are passed through, like bash)",
+    "missing-command": "install `{head}` or keep the guard (for `timeout`: `brew install coreutils` provides `gtimeout`)",
+}
 
 _CAUSE_ADVICE = {
     "missing-command": "`{head}` is not installed on this machine",

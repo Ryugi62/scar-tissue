@@ -8,7 +8,7 @@ def add(ts, s, kind, tool="Bash", command="", text=""):
 add("2026-10-01T09:00", "s1", "tool_error", command="until ! pgrep -f build.py; do sleep 5; done", text="Command timed out after 600000ms")
 add("2026-10-01T09:11", "s1", "tool_ok", command="for i in $(seq 1 60); do pgrep -f '[b]uild.py' >/dev/null || break; sleep 5; done", text="")
 add("2026-10-02T13:10", "s2", "tool_error", command="while pgrep -f 'node server'; do sleep 2; done", text="Command timed out after 120000ms")
-add("2026-10-03T22:40", "s3", "tool_error", command="pgrep -f render && sleep 30", text="Command timed out after 600000ms")
+add("2026-10-03T22:40", "s3", "tool_error", command="while pgrep -f render.py >/dev/null; do sleep 30; done", text="Command timed out after 600000ms")
 add("2026-10-03T22:55", "s3", "tool_error", command="until ! pgrep -f render.py; do sleep 10; done", text="timeout")
 # Pattern 2: git push --force corrected by the human twice
 add("2026-10-01T10:00", "s1", "tool_ok", command="git push --force origin main", text="+ 1a2b3c...4d5e6f main -> main (forced update)")

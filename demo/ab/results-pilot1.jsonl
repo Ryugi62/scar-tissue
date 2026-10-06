@@ -1,0 +1,2 @@
+{"run": "T1-A-0", "task": "T1", "cond": "A", "rep": 0, "bash_calls": 0, "tool_calls": 1, "zsh_failures": 0, "blocked_by_guard": 0, "tool_errors": 0, "answer_recall": 1.0, "turns": 2, "duration_s": 8.0, "cost_usd": 0.177808, "wall_s": 11.8}
+{"run": "T2-A-0", "task": "T2", "cond": "A", "rep": 0, "bash_calls": 2, "tool_calls": 2, "zsh_failures": 0, "blocked_by_guard": 0, "tool_errors": 0, "answer_recall": 1.0, "turns": 3, "duration_s": 13.5, "cost_usd": 0.2018472, "wall_s": 17.3}

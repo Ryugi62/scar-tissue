@@ -48,6 +48,11 @@ def slide_term(header, cmd, out, highlight=()):
 
 
 def tts(text, path):
+    """Voice-over: edge-tts neural voice (free) if $EDGE_TTS points to the CLI, else OpenAI TTS."""
+    if os.environ.get("EDGE_TTS"):
+        subprocess.run([os.environ["EDGE_TTS"], "--voice", "en-US-AndrewMultilingualNeural", "--rate", "+4%", "--text", text,
+                        "--write-media", path], check=True, capture_output=True)
+        return
     key = os.environ["OPENAI_API_KEY"]
     body = {"model": "gpt-4o-mini-tts", "voice": "alloy", "input": text, "response_format": "mp3",
             "instructions": "Calm, confident developer demo voice. Natural pace."}
@@ -71,47 +76,44 @@ def main():
     live_short = "── agent → Bash ──" + live.split("── agent (final answer) ──")[0]
     live_short = "\n".join(l for l in live_short.splitlines() if l.strip() and not l.startswith(("drwx", "-rw-", "total ", "---")))
     live_short = live_short.replace("PreToolUse:Bash hook error: [python3 ~/dev/hack47-offgrid/scar_tissue/guard.py]: ", "")
+    live_short = live_short.replace(" (If you are sure this case is different, append `# scar-ok: <reason>` to the command.)", "")
     import re as _re
     scan_part = _re.sub(r"in /\S+/(scar-demo-\w+)", r"in $TMPDIR/\1", scan_part)
     guard_part = "\n".join((l[:118] + " …") if "↳" in l and len(l) > 120 else l for l in guard_part.splitlines())
     stats = json.loads(rec("stats-real.json")); hold = json.loads(rec("holdout-real.json")); swe = json.loads(rec("swe-agent-public.json"))
     pct = lambda a, b: f"{100 * a / b:.1f}%" if 100 * a / b >= 1 else f"{100 * a / b:.2f}%"
-    stats_txt = "\n".join([
-        f"Claude Code transcripts scanned        {stats['sessions']:,}  (main sessions + subagents)",
-        f"tool calls                             {stats['tool_calls']:,}",
-        f"failed tool calls                      {stats['failures']:,}",
-        f"silent failures (exit 0, shell error)  {stats['silent_failures']:,}",
-        f"scars (repeated ≥3× across sessions)   {stats['scars']}",
-        f"automatic guard rules                  {stats['guard_rules']}",
-        f"demoted by self-validation             {stats['demoted_by_self_validation']}",
-        "",
-        f"failed shell commands the rules match  {stats['bash_failures_matched_by_rules']:,} of {stats['bash_failures']:,}  ({pct(stats['bash_failures_matched_by_rules'], stats['bash_failures'])})",
-        f"successful commands they would block   {stats['bash_successes_blocked']} of {stats['bash_successes']:,}  ({pct(stats['bash_successes_blocked'], stats['bash_successes'])})",
-    ])
+    names = {"bash-word-zsh-equals": "unquoted `=` word in zsh", "bash-include-zsh-nomatch": "unquoted --include=* glob in zsh",
+             "bash-pdffonts-missing-command": "pdffonts not installed"}
+    rule_txt = "\n".join(f"  {names.get(r['id'], r['id']):34s} {r['matched_failures']:>5,} failures · {r['sessions']:>3} sessions · {r['successes_blocked']:>2} wrong blocks"
+                         for r in stats["rules"])
+    stats_txt = rec("stats-real.txt") + "\nrules learned:\n" + rule_txt
+    fc = stats["failure_cost"]; inc = [r for r in stats["rules"] if r["id"] == "bash-include-zsh-nomatch"][0]
     hold_txt = "\n".join([
-        f"learn from the earliest {hold['train_sessions']:,} sessions → {hold['guard_rules']} rules",
-        f"replay the later {hold['test_sessions']:,} sessions:",
+        f"learn from the earliest {hold['train_sessions']:,} sessions → {hold['guard_rules']} rules; replay the later {hold['test_sessions']:,}:",
         f"  failures that would have been blocked   {hold['test_failures_blocked']:,} of {hold['test_failures']:,}  ({pct(hold['test_failures_blocked'], hold['test_failures'])})",
         f"  successful calls wrongly blocked        {hold['test_successes_blocked']} of {hold['test_successes']:,}  ({pct(hold['test_successes_blocked'], hold['test_successes'])})",
-        "", "public SWE-agent trajectories (HF nebius/SWE-agent-trajectories, 2,000 rows):",
-        f"  failure signatures repeated ≥3×         {swe['signatures_repeated_3plus']}",
-    ] + [f"  {x}" for x in swe.get("_examples", [])])
+        "  same result with the demotion ratio at 10, 20 or 50 (sensitivity-real.json)",
+        "", "silent failures — exit 0, but zsh aborted the search:",
+        f"  --include=* failures that exited 0          {inc['matched_silent']:,} of {inc['matched_failures']:,}",
+        f"  ...never re-run: agent moved on, 'nothing found'   {fc['bash-include-zsh-nomatch']['silent_never_fixed']}",
+        "", f"zsh failures per 1,000 shell calls: " + " → ".join(f"{t['per_1000']:.0f}" for t in stats["zsh_trend_per_1000_bash_calls"]) + "  (Sep 1 → Oct 6)",
+    ])
     tests = run("python3 -m unittest discover -s tests 2>&1 | tail -3")
     scenes = [
         (slide_title("Scar Tissue", "Your AI coding agent's repeated mistakes become guardrails — learned from its own logs."),
-         "Coding agents start every session fresh, so they repeat the same mistakes. On my laptop, almost half of my agent's failed shell commands came from a few habits it never unlearned. Scar Tissue finds them in the logs and blocks them."),
+         "Coding agents start every session fresh, so they repeat the same mistakes. On my laptop, almost half of my agent's failed shell commands came from a few habits it never unlearned. Scar Tissue finds them in the logs, and blocks them."),
         (slide_term("1 · scan + heal (bundled demo logs, no network)", "pipx install git+https://github.com/Ryugi62/scar-tissue && scar demo", scan_part),
-         "Scan reads the agent's session logs. A failure that repeats across sessions becomes a scar. The cause comes from the error text, not the command name: zsh choking on an unquoted equals sign, or a timeout binary that isn't installed."),
+         "Scan reads the agent's session logs. A failure that repeats across sessions becomes a scar. When the error text names the cause, like zsh choking on an unquoted equals sign, or a timeout binary that isn't installed, the cause becomes the signature."),
         (slide_term("2 · the guard: same habit blocked, the agent's own fix allowed", "scar demo   # (continued)", "3) guard" + guard_part, highlight=("BLOCKED",)),
-         "Each scar compiles into a Claude Code hook rule. The habit is blocked with the reason. The fix the agent found last time is learned too, so the guard never blocks its own advice. Plain git push and normal work pass."),
-        (slide_term("3 · live, unedited: a real Claude Code session meets the scar", "claude -p \"Wait for build.py using: until ! pgrep -f build.py; do sleep 2; done\"", live_short, highlight=("BLOCKED", "scar-tissue")),
-         "This is an unedited live run. The agent reaches for the old wait loop. The hook blocks it and shows what worked before. The agent uses that fix, the guard lets it through, and the build finishes."),
-        (slide_term("4 · every transcript on my laptop (aggregate counts only)", "scar stats '~/.claude/projects/**/*.jsonl'", stats_txt, highlight=("of",)),
-         f"Across {stats['sessions']:,} transcripts on my laptop, {stats['guard_rules']} automatic rules match {pct(stats['bash_failures_matched_by_rules'], stats['bash_failures'])} of the agent's failed shell commands, and would block {stats['bash_successes_blocked']} of {stats['bash_successes']:,} successful ones. Every candidate is replayed against the agent's own successful history first; the rest stay advice."),
-        (slide_term("5 · would it have helped? learn from the past, replay the future", "scar holdout '~/.claude/projects/**/*.jsonl'", hold_txt),
-         f"Learned only from earlier sessions, the rules would have stopped {pct(hold['test_failures_blocked'], hold['test_failures'])} of later failures. And it is not just my machine: in two thousand public SWE-agent runs, the same kind of habits repeat hundreds of times."),
-        (slide_term("tests · standard library only", "python3 -m unittest discover -s tests", tests),
-         "Install with one line and run scar demo. Standard library only, every rule reviewable as markdown, with an escape hatch the agent must justify. Next: Codex and Cursor adapters, and team scars shared through the repo."),
+         "Each scar compiles into a Claude Code hook rule, matched by a small shell tokenizer, not a regex. The habit is blocked with the reason, and the fix the agent found last time is shown and allowed. Plain git push and normal work pass."),
+        (slide_term("3 · live (prompted): a real Claude Code session meets the scar", "claude -p \"A build is running … Wait for it using: until ! pgrep -f build.py; do sleep 2; done …\"", live_short, highlight=("BLOCKED", "scar-tissue")),
+         "Here the agent is asked to use the old wait loop. The hook blocks it and shows what worked before. The agent uses that fix, the guard lets it through, and the build finishes in four turns."),
+        (slide_term("4 · every transcript on my laptop (aggregate counts only)", "scar stats '~/.claude/projects/**/*.jsonl' --table", stats_txt, highlight=("of",)),
+         f"On my laptop: {stats['sessions']:,} sessions and {stats['tool_calls'] // 1000} thousand tool calls. Three learned rules match {pct(stats['bash_failures_matched_by_rules'], stats['bash_failures'])} of the agent's failed shell commands, and would block {stats['bash_successes_blocked']} of {stats['bash_successes'] // 1000} thousand successful ones. Every candidate is replayed against the agent's own successful history first."),
+        (slide_term("5 · would it have helped? learn from the past, replay the future", "scar holdout '~/.claude/projects/**/*.jsonl'   (+ failure_cost, trend from stats-real.json)", hold_txt),
+         f"Learned only from earlier sessions, the rules would have blocked {pct(hold['test_failures_blocked'], hold['test_failures'])} of later failures. The silent ones matter most: {fc['bash-include-zsh-nomatch']['silent_never_fixed']} times a search was aborted by zsh, printed nothing, and the agent moved on as if nothing was found."),
+        (slide_term("tests · standard library only", "python3 -m unittest discover -s tests && scar report '<logs>'", tests),
+         "One line to install, scar demo to try, scar report for a read-only look at your own logs. Standard library only, every rule reviewable as markdown. Next: Codex and Cursor adapters, and team scars shared through the repo."),
     ]
     clips = []
     for i, (img, vo) in enumerate(scenes):

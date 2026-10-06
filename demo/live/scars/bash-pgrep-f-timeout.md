@@ -4,10 +4,10 @@
 
 **Signature.** `Bash:pgrep -f:timeout` — 4 failures, 0 corrections, 3 sessions.
 
-**Guard.** PreToolUse rule `bash-pgrep-f-timeout` blocks `Bash` calls matching `(?:^|[;&|(!{]\s*|\n\s*|\b(?:do|then|else|until|while|if|time|sudo|env|nohup|exec)\s+)pgrep\s+\-f[A-Za-z]?(?=\s|$)`.
+**Guard.** PreToolUse rule `bash-pgrep-f-timeout` blocks Bash calls with `pgrep -f` inside an unbounded while/until loop — except the shape of the agent's own fix (\bfor\s+\w+\s+in\s+(?:\{\d+\.\.\d+\}|\$\(seq\b), -f\s+['\"]?\[[^\]]+\]).
 
 ## Evidence
 - 2026-10-01T09:00 · session `s1` · tool_error · `until ! pgrep -f build.py; do sleep 5; done`
 - 2026-10-02T13:10 · session `s2` · tool_error · `while pgrep -f 'node server'; do sleep 2; done`
-- 2026-10-03T22:40 · session `s3` · tool_error · `pgrep -f render && sleep 30`
+- 2026-10-03T22:40 · session `s3` · tool_error · `while pgrep -f render.py >/dev/null; do sleep 30; done`
 - 2026-10-03T22:55 · session `s3` · tool_error · `until ! pgrep -f render.py; do sleep 10; done`

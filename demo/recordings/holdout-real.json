@@ -1,14 +1,18 @@
 {
- "train_sessions": 2417,
- "test_sessions": 1037,
- "guard_rules": 3,
- "test_failures": 1206,
- "test_failures_blocked": 486,
- "test_successes": 26497,
- "test_successes_blocked": 5,
+ "train_sessions": 644,
+ "test_sessions": 276,
+ "guard_rules": 2,
+ "rule_ids": [
+  "bash-word-zsh-equals",
+  "bash-include-zsh-nomatch"
+ ],
+ "test_failures": 3586,
+ "test_failures_blocked": 1499,
+ "test_successes": 56201,
+ "test_successes_blocked": 9,
  "_meta": {
   "command": "scar holdout '~/.claude/projects/**/*.jsonl'",
-  "run": "2026-10-06 15:34 KST",
-  "method": "learn scars from the earliest 70% of sessions (by first timestamp), replay the remaining 30%"
+  "run": "2026-10-06 16:08 KST",
+  "method": "learn from the earliest 70% of sessions (by first timestamp), replay the later 30%; Bash calls only"
  }
 }

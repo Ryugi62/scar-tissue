@@ -72,14 +72,14 @@ class DemoScan(unittest.TestCase):
         r = subprocess.run([sys.executable, guard], input=json.dumps(hook), capture_output=True, text=True)
         self.assertEqual(r.returncode, 2)          # wrapped commands are unwrapped and checked
         # escape hatch: proceed once with a stated reason, and the override is logged
-        hook["tool_input"]["command"] = "pgrep -f '[b]uild.py' # scar-ok: bracket pattern cannot match itself"
+        hook["tool_input"]["command"] = "until ! pgrep -f build.py; do sleep 1; done # scar-ok: build.py runs in a container here"
         r = subprocess.run([sys.executable, guard], input=json.dumps(hook), capture_output=True, text=True)
         self.assertEqual(r.returncode, 0)
         self.assertTrue(os.path.exists(os.path.join(d, ".scar", "overrides.jsonl")))
 
     def test_self_validation_demotes_rules_that_block_normal_work(self):
         from scar_tissue.domain import validate_against_history
-        ev = list(self.ev) + [Event("t", "s9", "tool_ok", "Bash", f"pgrep -f worker{i}", "ok") for i in range(10)]
+        ev = list(self.ev) + [Event("t", "s9", "tool_ok", "Bash", f"while pgrep -f worker{i}; do sleep 1; done", "ok") for i in range(10)]
         scars = detect(ev)
         validate_against_history(scars, ev)
         pg = [s for s in scars if s.head == "pgrep -f"][0]

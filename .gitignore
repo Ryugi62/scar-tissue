@@ -10,3 +10,5 @@ demo/out/*.old
 *.egg-info/
 build/
 demo/out/*.txt
+demo/ab/runs/
+demo/ab/runs*/

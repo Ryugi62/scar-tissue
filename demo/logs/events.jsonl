@@ -40,5 +40,5 @@
 {"ts": "2026-10-03T12:05", "session": "s3", "kind": "user_correction", "tool": "human", "command": "", "text": "no, use the other folder"}
 {"ts": "2026-10-03T14:00", "session": "s3", "kind": "tool_error", "tool": "Bash", "command": "cd api && timeout 30 python3 smoke.py", "text": "Exit code 127\n(eval):1: command not found: timeout"}
 {"ts": "2026-10-03T14:30", "session": "s3", "kind": "tool_error", "tool": "Bash", "command": "timeout 5 curl -s localhost:8080/health", "text": "Exit code 127\n(eval):1: command not found: timeout"}
-{"ts": "2026-10-03T22:40", "session": "s3", "kind": "tool_error", "tool": "Bash", "command": "pgrep -f render && sleep 30", "text": "Command timed out after 600000ms"}
+{"ts": "2026-10-03T22:40", "session": "s3", "kind": "tool_error", "tool": "Bash", "command": "while pgrep -f render.py >/dev/null; do sleep 30; done", "text": "Command timed out after 600000ms"}
 {"ts": "2026-10-03T22:55", "session": "s3", "kind": "tool_error", "tool": "Bash", "command": "until ! pgrep -f render.py; do sleep 10; done", "text": "timeout"}

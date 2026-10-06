@@ -4,7 +4,7 @@
 
 **Signature.** `Bash:timeout:missing-command` — 3 failures, 0 corrections, 2 sessions.
 
-**Guard.** PreToolUse rule `bash-timeout-missing-command` blocks `Bash` calls matching `(?:^|[;&|(!{]\s*|\n\s*|\b(?:do|then|else|until|while|if|time|sudo|env|nohup|exec)\s+)timeout(?=\s|$)`.
+**Guard.** PreToolUse rule `bash-timeout-missing-command` blocks Bash calls with any command that runs `timeout` (also behind env/nice/xargs/command wrappers and inside $(…)).
 
 ## Evidence
 - 2026-10-02T10:00 · session `s2` · tool_error · `timeout 60 npm test`

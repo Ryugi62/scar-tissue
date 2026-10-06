@@ -4,7 +4,7 @@
 
 **Signature.** `Bash:=word:zsh-equals` — 3 failures, 0 corrections, 2 sessions.
 
-**Guard.** PreToolUse rule `bash-word-zsh-equals` blocks `Bash` calls matching `(?:^|\s)=[^\s(]\S*`.
+**Guard.** PreToolUse rule `bash-word-zsh-equals` blocks Bash calls with an unquoted zsh word starting with `=` (`===`, `==`), outside [[ ]] / (( )) and outside bash -c payloads.
 
 ## Evidence
 - 2026-10-01T12:00 · session `s1` · tool_error · `make build && echo === Build done ===`

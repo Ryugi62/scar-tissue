@@ -11,8 +11,16 @@ def _text(content):
     return str(content or "")
 
 
+def session_id(path):
+    """A subagent transcript (<session>/subagents/agent-*.jsonl) belongs to its parent session."""
+    parts = os.path.normpath(path).split(os.sep)
+    if len(parts) >= 3 and parts[-2] == "subagents":
+        return parts[-3]
+    return os.path.splitext(parts[-1])[0]
+
+
 def read_session(path):
-    session = os.path.splitext(os.path.basename(path))[0]
+    session = session_id(path)
     calls = {}  # tool_use_id → (tool, command)
     events = []
     with open(path, encoding="utf-8", errors="ignore") as f:
@@ -50,8 +58,9 @@ def read_session(path):
 
 
 def read_dir(pattern):
-    events, n = [], 0
+    """(events, number of sessions) — subagent transcripts are folded into their parent session."""
+    events, ids = [], set()
     for p in sorted(glob.glob(os.path.expanduser(pattern), recursive=True)):   # `**` reaches subagent transcripts
-        n += 1
+        ids.add(session_id(p))
         events += read_session(p)
-    return events, n
+    return events, len(ids)

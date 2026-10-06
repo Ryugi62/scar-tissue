@@ -52,3 +52,11 @@ Problem found on real logs: most repeated failures are *environment* mistakes th
 
 ### Success criteria (added, real data — aggregate only)
 - Holdout on the author's transcripts (learn from the earliest 70% of sessions, replay the last 30%): report Bash failures prevented and successful calls wrongly blocked; wrongly blocked ≤ 0.1%.
+
+## v3 — review fixes (OFFGRID week 2)
+- Rules are structured (`kind: head | missing-command | zsh-equals | zsh-nomatch`) and matched per simple command by `scar_tissue/shell.py`, a linear-time tokenizer (quotes, escapes, heredocs, comments, `[[ ]]`/`(( ))`, loop context, `$(…)`/backticks, `bash -c` payloads parsed as bash). Probes in `tests/test_shell.py` are the acceptance criteria: `git push -f`, `git -C x push --force`, `FOO=1 timeout`, `nice/xargs/command timeout`, backticks are caught; `pgrep -f server` (one-shot), `echo do timeout 5`, `--include=\*.md`, `bash -c 'echo === x'` pass; pathological inputs parse in < 0.25 s.
+- A head habit learned only inside unbounded `while`/`until` loops is enforced only there (`context: loop`).
+- Corrections count only if the message shares a word (≥3 letters) with the call; polite phrases ("no worries", "never mind") never count.
+- Subagent transcripts are folded into their parent session; holdout and stats use Bash-only denominators; stats report per-rule matches split into exit ≠ 0 / silent, the failure cost (calls and seconds to the agent's fix, silent failures never fixed), demoted candidates, and a zsh trend.
+- Override: `# scar-ok: <reason>` works only when a rule matches, is logged with the rule id, at most 3 times per rule.
+- SessionStart reads `.scar/brief.md` written by `heal` (no rescan at startup). `scar report` = read-only markdown report with environment fixes.
