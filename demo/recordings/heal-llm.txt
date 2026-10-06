@@ -1,0 +1,4 @@
+  ✚ rule bash-pgrep-f-timeout: Avoid long-running pgrep polling loops that hit timeouts; instead, use a bounded timeout, check process status less frequently, or switch to event/log-based completion detection.
+  ✚ rule bash-git-push-corrected: Never force-push main; always use a normal push or open a branch and pull request instead.
+  ✚ rule bash-curl-s-exit: Avoid relying on `curl -s` piped to `grep` for validation; use a request that checks status/content explicitly and handle missing matches without failing the command.
+wrote 3 scars → demo/out/scars/ and rules → demo/out/.scar/rules.json

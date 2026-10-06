@@ -1,0 +1,11 @@
+{
+ "sessions": 85,
+ "tool_calls": 29163,
+ "failures": 1810,
+ "corrections": 38,
+ "signatures": 295,
+ "signatures_repeated_3plus": 87,
+ "scars": 91,
+ "guard_rules": 10,
+ "already_guarded": 29
+}

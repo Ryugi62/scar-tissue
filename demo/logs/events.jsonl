@@ -1,0 +1,35 @@
+{"ts": "2026-10-01T08:00", "session": "s1", "kind": "tool_ok", "tool": "Bash", "command": "ls -la", "text": "ok"}
+{"ts": "2026-10-01T08:03", "session": "s1", "kind": "tool_ok", "tool": "Bash", "command": "cat README.md", "text": "ok"}
+{"ts": "2026-10-01T08:06", "session": "s1", "kind": "tool_ok", "tool": "Bash", "command": "python3 app.py", "text": "ok"}
+{"ts": "2026-10-01T08:09", "session": "s1", "kind": "tool_ok", "tool": "Bash", "command": "git status", "text": "ok"}
+{"ts": "2026-10-01T08:12", "session": "s1", "kind": "tool_ok", "tool": "Bash", "command": "ls -la", "text": "ok"}
+{"ts": "2026-10-01T08:15", "session": "s1", "kind": "tool_ok", "tool": "Bash", "command": "cat README.md", "text": "ok"}
+{"ts": "2026-10-01T08:18", "session": "s1", "kind": "tool_ok", "tool": "Bash", "command": "python3 app.py", "text": "ok"}
+{"ts": "2026-10-01T09:00", "session": "s1", "kind": "tool_error", "tool": "Bash", "command": "until ! pgrep -f build.py; do sleep 5; done", "text": "Command timed out after 600000ms"}
+{"ts": "2026-10-01T10:00", "session": "s1", "kind": "tool_ok", "tool": "Bash", "command": "git push --force origin main", "text": "+ 1a2b3c...4d5e6f main -> main (forced update)"}
+{"ts": "2026-10-01T10:01", "session": "s1", "kind": "user_correction", "tool": "human", "command": "", "text": "no, never force-push main"}
+{"ts": "2026-10-01T11:00", "session": "s1", "kind": "tool_error", "tool": "Bash", "command": "npm test", "text": "exit code 1"}
+{"ts": "2026-10-02T08:01", "session": "s2", "kind": "tool_ok", "tool": "Bash", "command": "git status", "text": "ok"}
+{"ts": "2026-10-02T08:04", "session": "s2", "kind": "tool_ok", "tool": "Bash", "command": "ls -la", "text": "ok"}
+{"ts": "2026-10-02T08:07", "session": "s2", "kind": "tool_ok", "tool": "Bash", "command": "cat README.md", "text": "ok"}
+{"ts": "2026-10-02T08:10", "session": "s2", "kind": "tool_ok", "tool": "Bash", "command": "python3 app.py", "text": "ok"}
+{"ts": "2026-10-02T08:13", "session": "s2", "kind": "tool_ok", "tool": "Bash", "command": "git status", "text": "ok"}
+{"ts": "2026-10-02T08:16", "session": "s2", "kind": "tool_ok", "tool": "Bash", "command": "ls -la", "text": "ok"}
+{"ts": "2026-10-02T08:19", "session": "s2", "kind": "tool_ok", "tool": "Bash", "command": "cat README.md", "text": "ok"}
+{"ts": "2026-10-02T11:00", "session": "s2", "kind": "tool_error", "tool": "Bash", "command": "curl -s https://example-hackathon.dev/rules | grep prize", "text": "exit code 1"}
+{"ts": "2026-10-02T12:00", "session": "s2", "kind": "tool_error", "tool": "Bash", "command": "python3 -m pytest -q", "text": "exit code 2"}
+{"ts": "2026-10-02T13:10", "session": "s2", "kind": "tool_error", "tool": "Bash", "command": "while pgrep -f 'node server'; do sleep 2; done", "text": "Command timed out after 120000ms"}
+{"ts": "2026-10-02T15:00", "session": "s2", "kind": "tool_ok", "tool": "Bash", "command": "git push --force", "text": "forced update"}
+{"ts": "2026-10-02T15:02", "session": "s2", "kind": "user_correction", "tool": "human", "command": "", "text": "stop force pushing, I told you yesterday"}
+{"ts": "2026-10-03T08:02", "session": "s3", "kind": "tool_ok", "tool": "Bash", "command": "python3 app.py", "text": "ok"}
+{"ts": "2026-10-03T08:05", "session": "s3", "kind": "tool_ok", "tool": "Bash", "command": "git status", "text": "ok"}
+{"ts": "2026-10-03T08:08", "session": "s3", "kind": "tool_ok", "tool": "Bash", "command": "ls -la", "text": "ok"}
+{"ts": "2026-10-03T08:11", "session": "s3", "kind": "tool_ok", "tool": "Bash", "command": "cat README.md", "text": "ok"}
+{"ts": "2026-10-03T08:14", "session": "s3", "kind": "tool_ok", "tool": "Bash", "command": "python3 app.py", "text": "ok"}
+{"ts": "2026-10-03T08:17", "session": "s3", "kind": "tool_ok", "tool": "Bash", "command": "git status", "text": "ok"}
+{"ts": "2026-10-03T09:30", "session": "s3", "kind": "tool_error", "tool": "Bash", "command": "curl -s https://another-contest.app/ | grep deadline", "text": "exit code 1"}
+{"ts": "2026-10-03T09:35", "session": "s3", "kind": "tool_error", "tool": "Bash", "command": "curl -sL https://spa.example.org/terms | grep -i eligib", "text": "exit code 1"}
+{"ts": "2026-10-03T12:00", "session": "s3", "kind": "tool_error", "tool": "Bash", "command": "ls /nope", "text": "No such file or directory"}
+{"ts": "2026-10-03T12:05", "session": "s3", "kind": "user_correction", "tool": "human", "command": "", "text": "no, use the other folder"}
+{"ts": "2026-10-03T22:40", "session": "s3", "kind": "tool_error", "tool": "Bash", "command": "pgrep -f render && sleep 30", "text": "Command timed out after 600000ms"}
+{"ts": "2026-10-03T22:55", "session": "s3", "kind": "tool_error", "tool": "Bash", "command": "until ! pgrep -f render.py; do sleep 10; done", "text": "timeout"}

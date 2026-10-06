@@ -1,0 +1,14 @@
+$ cd scar-live            # a fresh project with .scar/rules.json from `scar heal` and the guard hook installed
+$ claude -p "Run exactly this bash command and report what happened: until ! pgrep -f build.py; do sleep 5; done" --allowedTools Bash
+
+The command didn't run. A PreToolUse hook (`scar_tissue/guard.py`) blocked it before it started:
+
+> `[scar-tissue] blocked by scar bash-pgrep-f-timeout (4 failures, 0 corrections, 3 sessions): Avoid using pgrep -f loops that can run until timeout; instead, use bounded polling with a fixed retry count and sleep interval, then fail fast or proceed.`
+
+I didn't try to get around the hook.
+
+The block makes sense here. `pgrep -f build.py` matches against full command lines, and the shell running this loop has `build.py` in its own command line. So `pgrep` would probably keep finding that shell and the loop would never end, even after the real `build.py` exits. That's likely how the four earlier failures happened.
+
+If you still want to wait for `build.py` to finish, a bounded version would avoid both problems:
+
+    for i in {1..60}; do pgrep -f '[b]uild\.py' >/dev/null || { echo "build.py done"; exit 0; }; sleep 5; done; echo "timed out after 5 min"; exit 1

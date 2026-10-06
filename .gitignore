@@ -1,0 +1,5 @@
+__pycache__/
+demo/out/*.mp3
+demo/out/*.png
+demo/out/s*.mp4
+demo/out/list.txt
