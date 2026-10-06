@@ -3,3 +3,10 @@ demo/out/*.mp3
 demo/out/*.png
 demo/out/s*.mp4
 demo/out/list.txt
+demo/live/.claude/
+demo/live/.scar/
+demo/live/build/
+demo/out/*.old
+*.egg-info/
+build/
+demo/out/*.txt

@@ -1,4 +1,6 @@
-3 sessions · 35 events · 3 scars
-  ✱ [GUARD ] Bash:pgrep -f:timeout                                        failures=4 corrections=0 sessions=3
-  ✱ [GUARD ] Bash:git push:corrected                                      failures=0 corrections=2 sessions=2
-  ✱ [advice] Bash:curl -s:exit                                            failures=3 corrections=0 sessions=2
+3 sessions · 44 events · 5 scars
+  ✱ [GUARD ] Bash:pgrep -f:timeout                                        failures=4 corrections=0 sessions=3 recoveries=1
+  ✱ [GUARD ] Bash:git push:corrected                                      failures=0 corrections=2 sessions=2 recoveries=0
+  ✱ [GUARD ] Bash:=word:zsh-equals                                        failures=3 corrections=0 sessions=2 recoveries=1
+  ✱ [GUARD ] Bash:timeout:missing-command                                 failures=3 corrections=0 sessions=2 recoveries=1
+  ✱ [advice] Bash:curl -s:exit                                            failures=3 corrections=0 sessions=2 recoveries=0

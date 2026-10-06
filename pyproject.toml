@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "scar-tissue"
+version = "0.2.0"
+description = "Your AI coding agent's repeated mistakes become Claude Code guardrails."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+dependencies = []
+
+[project.scripts]
+scar = "scar_tissue.cli:main"
+
+[project.urls]
+Source = "https://github.com/Ryugi62/scar-tissue"
+
+[tool.setuptools]
+packages = ["scar_tissue", "scar_tissue.adapters"]
+
+[tool.setuptools.package-data]
+scar_tissue = ["demo_events.jsonl"]

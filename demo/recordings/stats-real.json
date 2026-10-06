@@ -1,12 +1,24 @@
 {
- "sessions": 85,
- "tool_calls": 29172,
- "failures": 1810,
+ "sessions": 4090,
+ "tool_calls": 151235,
+ "failures": 6981,
  "corrections": 38,
- "signatures": 295,
- "signatures_repeated_3plus": 87,
- "scars": 91,
- "guard_rules": 1,
- "demoted_by_self_validation": 2,
- "already_guarded": 29
+ "silent_failures": 2323,
+ "signatures": 698,
+ "signatures_repeated_3plus": 169,
+ "scars": 173,
+ "root_cause_scars": 12,
+ "guard_rules": 4,
+ "demoted_by_self_validation": 11,
+ "already_guarded": 49,
+ "recoveries_learned": 1878,
+ "bash_failures": 6114,
+ "bash_failures_matched_by_rules": 2793,
+ "bash_successes": 93709,
+ "bash_successes_blocked": 19,
+ "_meta": {
+  "command": "scar stats '~/.claude/projects/**/*.jsonl'",
+  "run": "2026-10-06 15:34 KST",
+  "scope": "every Claude Code transcript on the author's laptop (main sessions + subagents); aggregate counts only"
+ }
 }

@@ -1,6 +1,6 @@
 # Scar: pgrep -f (timeout)
 
-**Principle.** Avoid long-running `pgrep -f` polling loops that time out; instead check once, use a bounded retry loop with short sleeps, or wait on the process directly.
+**Principle.** `pgrep -f` ran until the tool timeout 4× across 3 sessions — bound the wait: a fixed retry count or a time limit.
 
 **Signature.** `Bash:pgrep -f:timeout` — 4 failures, 0 corrections, 3 sessions.
 

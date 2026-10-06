@@ -4,7 +4,7 @@
 AI coding agents (Claude Code, Codex, …) run for hours on a developer's own machine and repeat the same mistakes across sessions: they wait forever on a `pgrep -f` loop, push to the wrong branch, conclude "not found" from a page they never read. Each session starts fresh, so the lesson is lost. **Scar Tissue turns repeated failures into guardrails**: it reads agent session logs, finds failures that happened ≥3 times (or were corrected by the human ≥2 times), writes a short *scar* (principle + evidence), and compiles it into a **PreToolUse hook rule** that blocks the same mistake next time — with the scar's explanation shown to the agent.
 
 ## Success criteria (numbers)
-- `scar scan` on the bundled demo logs (3 sessions) finds exactly the 3 seeded repeated-failure patterns and 0 false scars from 1-off errors.
+- `scar scan` on the bundled demo logs (3 sessions) finds exactly the 5 seeded repeated-failure patterns (3 head habits + 2 root causes, v2) and 0 false scars from 1-off errors.
 - `scar heal` writes one markdown scar + one rule per pattern; every rule blocks its original failing commands (recall 100% on the seed set) and allows the bundled list of 30 safe commands (0 false blocks).
 - The guard hook decides in < 50 ms per call, uses stdlib only.
 - Real-world run: scanning the author's own local Claude Code transcripts produces aggregate counts only (sessions, tool calls, failures, signatures ≥3) — no transcript content leaves the machine.
@@ -30,3 +30,25 @@ AI coding agents (Claude Code, Codex, …) run for hours on a developer's own ma
 
 ## Architecture
 `scar_tissue/domain.py` (signatures, clustering, rule compilation — pure) ← `application.py` (scan/heal use cases) ← `adapters/` (Claude Code transcript reader, generic JSONL reader, OpenAI phrasing) ← `cli.py`. `guard.py` is a standalone stdlib script.
+
+## v2 — root causes and recoveries (OFFGRID week 2)
+Problem found on real logs: most repeated failures are *environment* mistakes that the command head hides (`echo === Done ===` fails in zsh; `timeout` does not exist on macOS) — and a rule must never block the fix the agent already found.
+
+### Ubiquitous language (added)
+- **root cause** — a cause extracted from the error text, independent of the command head: `missing-command:<name>` (`command not found: timeout`), `zsh-equals` (`(eval):1: === not found` — an unquoted word starting with `=`), `zsh-nomatch:<shape>` (`no matches found: --include=*.md`). A root-cause scar's signature is `tool:<cause head>:<cause class>`.
+- **shell view** — the command as the shell parses words: heredoc bodies, quoted strings, `[[ … ]]`, `(( … ))` and comments blanked. Root-cause rules match the shell view, so `echo "=== x ==="` or a Python heredoc with `a == b` never trip them.
+- **recovery** — the next successful call in the same session, same tool, same command head, within 6 calls after a failure: the agent's own fix.
+- **unless** — rule exemptions learned from recoveries: remedy markers (bounded loop, `timeout`/`perl alarm` wrapper, bracket self-match pattern) and flags present in a recovery but in no failure.
+- **fix-safety** — a rule must not block any recorded recovery; if it still would after `unless`, the scar is demoted to advice.
+
+### Given / When / Then (added)
+7. Given `zsh: command not found: timeout` 3× across 2 sessions (heads `afconvert`, `python3`, `bash`), When scan, Then one scar `Bash:timeout:missing-command`; its rule blocks `timeout 60 make` and `cd x && timeout 5 curl y`, allows `gtimeout 60 make`, `echo "timeout"`, `perl -e 'alarm 60; exec @ARGV' make`.
+8. Given `(eval):1: === not found` / `== not found` 3× across 2 sessions, When scan, Then one scar `Bash:=word:zsh-equals`; its rule blocks `echo === Done ===` and `[ "$a" == b ]`, allows `echo "=== Done ==="`, `[[ $a == b ]]`, `a=b make`, and a heredoc `python3 - <<'EOF'` containing `if a == b:`.
+9. Given `no matches found: --include=*.md` 3× across 2 sessions, Then scar `Bash:--include=*:zsh-nomatch`; rule blocks `grep -rn foo . --include=*.md`, allows `grep -rn foo . --include='*.md'`.
+10. Given pgrep -f timeouts each followed by a successful bounded loop `for i in $(seq 1 60); do pgrep -f '[b]uild.py' … done`, When heal, Then the rule blocks `until ! pgrep -f build.py; do sleep 5; done` but allows the recovery and `for i in {1..30}; do pgrep -f '[w]orker' || break; sleep 2; done`; the guard message contains `Worked before:`.
+11. Fix-safety: no compiled rule matches any recovery in the logs it was learned from (checked on the demo set and the real-data run).
+12. `Permission to use Bash … has been denied` is class `blocked` (already guarded by the permission system), not a new scar.
+13. `scar demo` runs scan → heal → guard on the bundled logs in a temp dir, prints which commands are blocked/allowed, needs no network, exits 0 in < 2 s.
+
+### Success criteria (added, real data — aggregate only)
+- Holdout on the author's transcripts (learn from the earliest 70% of sessions, replay the last 30%): report Bash failures prevented and successful calls wrongly blocked; wrongly blocked ≤ 0.1%.

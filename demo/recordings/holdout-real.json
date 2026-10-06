@@ -1,0 +1,14 @@
+{
+ "train_sessions": 2417,
+ "test_sessions": 1037,
+ "guard_rules": 3,
+ "test_failures": 1206,
+ "test_failures_blocked": 486,
+ "test_successes": 26497,
+ "test_successes_blocked": 5,
+ "_meta": {
+  "command": "scar holdout '~/.claude/projects/**/*.jsonl'",
+  "run": "2026-10-06 15:34 KST",
+  "method": "learn scars from the earliest 70% of sessions (by first timestamp), replay the remaining 30%"
+ }
+}

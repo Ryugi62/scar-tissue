@@ -1,6 +1,7 @@
 """Pure domain: events → signatures → scars → rules. No I/O."""
 from __future__ import annotations
 import re
+from functools import lru_cache
 from dataclasses import dataclass, field
 from collections import defaultdict
 
@@ -12,7 +13,7 @@ ERROR_CLASSES = [  # (class, regex on error text) — first match wins
     ("timeout", r"timed? ?out|timeout|deadline exceeded|exceeded \d+ ?m?s"),
     ("permission", r"permission denied|not permitted|EACCES|authorization denied|-1728"),
     ("not-found", r"not found|no such file|ENOENT|404|command not found"),
-    ("blocked", r"\bblocked\b|차단|denied by hook|hook error"),
+    ("blocked", r"\bblocked\b|차단|denied by hook|hook error|has been denied|denied by a built-in"),
     ("rejected", r"rejected|non-fast-forward|conflict"),
     ("http", r"HTTP ?[45]\d\d|status[ =:]+[45]\d\d"),
     ("exit", r"exit(?:ed)? (?:code|status)? ?[1-9]\d*|returned non-zero"),
@@ -24,6 +25,59 @@ GENERIC_FIRST = {"python3", "python", "node", "bash", "sh", "zsh", "sed", "grep"
                  "mkdir", "rm", "cp", "mv", "find", "cd", "touch", "printf", "awk", "jq", "sort", "diff"}
 GENERIC_HEADS = {"python3", "python", "node", "bash", "sh", "zsh", "sed", "grep", "echo", "cat", "ls", "head", "tail",
                  "git add", "git commit", "git status", "cd", "python3 -", "python -", "sed -n", "grep -n", "echo STR"}
+
+ROOT_CAUSE_CLASSES = ("missing-command", "zsh-equals", "zsh-nomatch")
+_ROOT_CAUSES = [   # (class, regex on error text) — the cause is in the error, not in the command head
+    ("missing-command", re.compile(r"command not found: ([\w.+-]+)|(?:^|\s)([\w.+-]+): command not found", re.M)),
+    ("zsh-equals", re.compile(r"(?:\(eval\)|zsh):\d+: (=+)\S* not found")),
+    ("zsh-nomatch", re.compile(r"no matches found: (\S+)")),
+]
+# command position: start of a simple command (after a separator, a shell keyword, or a newline)
+CMD_POS = r"(?:^|[;&|(!{]\s*|\n\s*|\b(?:do|then|else|until|while|if|time|sudo|env|nohup|exec)\s+)"
+# the shapes a fix usually takes — learned per scar only if a recovery has the marker and no failure does
+REMEDY_MARKERS = {
+    "bounded-loop": r"\bfor\s+\w+\s+in\s+(?:\{\d+\.\.\d+\}|\$\(seq\b)",
+    "time-limit-wrapper": r"(?:^|[;&|]\s*)(?:g?timeout\s+\d|perl\s+-e\s+['\"]alarm)",
+    "self-match-safe-pattern": r"-f\s+['\"]?\[[^\]]+\]",
+}
+BENEFIT_RATIO = 20    # beyond 3 false blocks, a rule must stop ≥20 mistakes per success it blocks
+RECOVERY_WINDOW = 6   # a recovery is a success with the same head within 6 calls after the failure
+
+
+def root_cause(text: str):
+    """(cause class, cause head) when the error text names the real cause, else None."""
+    for cls, pat in _ROOT_CAUSES:
+        m = pat.search(text or "")
+        if not m:
+            continue
+        tok = next(g for g in m.groups() if g)
+        if cls == "missing-command":
+            return cls, tok
+        if cls == "zsh-equals":
+            return cls, "=word"
+        flag = re.match(r"^(--?[\w-]+=)", tok)
+        return cls, (flag.group(1) + "*") if flag else "glob"
+    return None
+
+
+SHELL_ERR = re.compile(r"(?:\(eval\)|(?<![\w/.-])(?:zsh|bash)):\d+: [^\n]*")   # an error line printed by the shell itself
+
+
+@lru_cache(maxsize=65536)
+def silent_root_cause(text: str):
+    """A call that exited 0 can still have failed part-way: only a shell-prefixed error line counts (`(eval):1: …`, `zsh:3: …`)."""
+    lines = "\n".join(SHELL_ERR.findall(text or ""))
+    return root_cause(lines) if lines else None
+
+
+@lru_cache(maxsize=65536)
+def shell_view(cmd: str) -> str:
+    """The words the shell actually parses: heredoc bodies, quoted strings, comments, [[ ]] and (( )) blanked."""
+    s = re.sub(r"<<-?\s*(['\"]?)(\w+)\1([^\n]*)\n(?:.*?\n)?[ \t]*\2[ \t]*(?=\n|$)", r"<<H\3", cmd or "", flags=re.S)
+    s = re.sub(r"\$?'[^']*'|\"(?:\\.|[^\"\\])*\"", "Q", s)
+    s = re.sub(r"(?:(?<=\s)|^)#[^\n]*", "", s, flags=re.M)
+    s = re.sub(r"\[\[.*?\]\]", "[[ ]]", s)
+    return re.sub(r"\$?\(\(.*?\)\)", "(( ))", s)
 
 
 @dataclass(frozen=True)
@@ -45,6 +99,7 @@ class Scar:
     failures: list = field(default_factory=list)      # Events
     corrections: list = field(default_factory=list)   # Events
     corrected_calls: list = field(default_factory=list)  # the tool calls the human corrected
+    recoveries: list = field(default_factory=list)    # the agent's own fixes: successful calls right after a failure
 
     @property
     def sessions(self):
@@ -56,6 +111,8 @@ class Scar:
         or the head is a generic interpreter/reader with no shared flag (would block normal work)."""
         if self.error_class == "blocked" or self.tool not in ("Bash",):
             return False
+        if self.error_class in ROOT_CAUSE_CLASSES:     # the error text named the cause → precise by construction
+            return not getattr(self, "demoted", False)
         if self.error_class in ("exit", "error", "not-found") and not self.corrections:
             return False   # a non-zero exit is an outcome, not a habit — needs a timeout/permission/rejection or a human correction
         if getattr(self, "demoted", False):
@@ -119,6 +176,9 @@ def error_class(text: str) -> str:
 
 
 def signature(ev: Event) -> tuple[str, str, str]:
+    rc = root_cause(ev.text) if ev.kind == "tool_error" else silent_root_cause(ev.text) if ev.kind == "tool_ok" else None
+    if rc:
+        return ev.tool, rc[1], rc[0]
     head = command_head(ev.command) if ev.command else ev.tool
     return ev.tool, head, error_class(ev.text)
 
@@ -129,16 +189,32 @@ def is_correction(text: str) -> bool:
 
 
 def detect(events: list[Event]) -> list[Scar]:
-    """Group failures by signature; attach each user correction to the last failing/any tool call before it in the same session."""
+    """Group failures by signature; attach each user correction to the last tool call before it in the same session;
+    attach each recovery (same tool + same command head, success, within RECOVERY_WINDOW calls) to the failure's scar."""
     groups: dict[str, Scar] = {}
     last_call: dict[str, Event] = {}
+    pending: dict[str, list] = {}    # session → [(scar key, tool, head, calls left)]
+    failed: dict = {}                 # (scar key, head) → the latest failing command
     for ev in events:
+        silent = ev.kind == "tool_ok" and silent_root_cause(ev.text) is not None
         if ev.kind in ("tool_error", "hook_block", "tool_ok") and ev.command:
             last_call[ev.session] = ev
-        if ev.kind in ("tool_error", "hook_block"):
+            waiting = []
+            for key, tool, head, left in pending.get(ev.session, []):
+                if ev.kind == "tool_ok" and not silent and ev.tool == tool and (command_head(ev.command) == head or
+                                                                               _same_task(failed[key, head], ev.command, key)):
+                    if not any(r is ev for r in groups[key].recoveries):   # one fix can resolve several pending failures
+                        groups[key].recoveries.append(ev)
+                elif left > 1:
+                    waiting.append((key, tool, head, left - 1))
+            pending[ev.session] = waiting
+        if ev.kind in ("tool_error", "hook_block") or silent:
             tool, head, ec = signature(ev)
             key = f"{tool}:{head}:{ec}"
             groups.setdefault(key, Scar(key, tool, head, ec)).failures.append(ev)
+            if ev.kind != "hook_block" and ev.command:
+                pending.setdefault(ev.session, []).append((key, ev.tool, command_head(ev.command), RECOVERY_WINDOW))
+                failed[key, command_head(ev.command)] = ev.command
         elif ev.kind == "user_correction":
             prev = last_call.get(ev.session)
             if prev is None:
@@ -157,13 +233,29 @@ def detect(events: list[Event]) -> list[Scar]:
     return sorted(scars, key=lambda s: -(len(s.failures) + 2 * len(s.corrections)))
 
 
+def _words(cmd: str) -> set:
+    return set(re.findall(r"[A-Za-z_][\w.-]+", cmd or ""))
+
+
+def _same_task(failed_cmd: str, ok_cmd: str, key: str) -> bool:
+    """Root-cause failures are often fixed with a different head (`timeout 60 npm test` → `perl -e 'alarm 60…' npm test`):
+    the success counts as a recovery if it keeps ≥60% of the failing command's words (minimum 2) besides the cause."""
+    if key.rsplit(":", 1)[-1] not in ROOT_CAUSE_CLASSES:
+        return False
+    cause = key.split(":")[1]
+    f = _words(failed_cmd) - {cause}
+    return len(f) >= 2 and len(f & _words(ok_cmd)) / len(f) >= 0.6
+
+
 def validate_against_history(scars, events, max_rate=0.005, max_count=3):
     """Self-validation: replay every candidate rule against the agent's own SUCCESSFUL calls.
-    A rule that would have blocked normal work more than max_count times (or > max_rate of successful calls) is demoted to advice."""
+    A rule is demoted to advice if it would have blocked normal work more than max_count times AND more than once per
+    BENEFIT_RATIO mistakes it stops, or more than max_rate of all successful calls.
+    Fix-safety: a rule that would block one of the agent's own recoveries is demoted too."""
     corrected = {id(c) for sc in scars for c in sc.corrected_calls}   # calls the human corrected are not "normal work"
     ok = {}
     for e in events:
-        if e.kind == "tool_ok" and e.command and id(e) not in corrected:
+        if e.kind == "tool_ok" and e.command and id(e) not in corrected and silent_root_cause(e.text) is None:
             ok.setdefault(e.tool, []).append(e.command)
     report = []
     for s in scars:
@@ -173,34 +265,81 @@ def validate_against_history(scars, events, max_rate=0.005, max_count=3):
         hits = sum(1 for c in ok.get(s.tool, []) if rule_matches(rule, s.tool, {"command": c}))
         n = max(1, len(ok.get(s.tool, [])))
         s.false_blocks = hits
-        if hits > max_count or hits / n > max_rate:
+        s.blocks_own_fix = sum(1 for r in s.recoveries if rule_matches(rule, s.tool, {"command": r.command}))
+        benefit = len(s.failures) + len(s.corrections)   # mistakes the rule would have stopped
+        if (hits > max_count and hits * BENEFIT_RATIO > benefit) or hits / n > max_rate or s.blocks_own_fix:
             s.demoted = True
         report.append((s.signature, hits, n, getattr(s, "demoted", False)))
     return report
 
 
+def _unless(scar: Scar) -> list:
+    """Exemptions learned from recoveries: remedy markers and flags a recovery has and no failure has."""
+    fails = [e.command for e in scar.failures + scar.corrected_calls if e.command]
+    recs = [e.command for e in scar.recoveries if e.command]
+    out = []
+    for pat in REMEDY_MARKERS.values():
+        if any(re.search(pat, r) for r in recs) and not any(re.search(pat, f) for f in fails):
+            out.append(pat)
+    if scar.error_class in ROOT_CAUSE_CLASSES:     # root-cause rules match the cause itself; unrelated flags are not a fix
+        return out
+    fail_flags = {t for f in fails for t in f.split() if t.startswith("-")}
+    for flag in sorted({t for r in recs for t in r.split() if re.match(r"^--?[A-Za-z][\w-]*$", t)} - fail_flags):
+        out.append(r"(?:^|\s)" + re.escape(flag) + r"(?=[\s=]|$)")
+    return out
+
+
 def compile_rule(scar: Scar, principle: str) -> dict:
-    """A rule that matches the tool input of the failing calls: the command head as a word-bounded regex."""
-    toks = scar.head.split()
-    parts = [re.escape(t) + (r"[A-Za-z]?" if re.match(r"^-[A-Za-z]$", t) else "") for t in toks]   # -s also matches -sL
-    # command position only: start, after ; & | ( ! or a shell keyword — so `echo pgrep -f` is not a pgrep call
-    pat = r"(?:^|[;&|(!]\s*|\b(?:do|then|until|while|if)\s+)" + r"\s+".join(parts) + r"(?=\s|$)"
-    # if every example shares a flag beyond the head (e.g. --force), require it — plain `git push` stays allowed
-    examples = [e.command for e in scar.failures + scar.corrected_calls if e.command]
-    if examples:
-        common = set.intersection(*[set(c.split()) for c in examples]) - set(toks)
-        flags = sorted(t for t in common if t.startswith("-"))
-        if flags:
-            pat = "".join(rf"(?=.*\s{re.escape(f)}(?:\s|$))" for f in flags) + pat
-    return {"id": scar.slug, "tool": scar.tool, "pattern": pat, "message": principle,
-            "evidence": {"failures": len(scar.failures), "corrections": len(scar.corrections), "sessions": len(scar.sessions)}}
+    """A rule that matches the tool input of the failing calls. Root-cause scars match the shell view; head scars match the
+    command head at command position (+ the flags every example shares). Exemptions (`unless`) come from the agent's own fixes."""
+    view = "raw"
+    if scar.error_class == "missing-command":
+        pat, view = CMD_POS + re.escape(scar.head) + r"(?=\s|$)", "shell"
+    elif scar.error_class == "zsh-equals":
+        pat, view = r"(?:^|\s)=[^\s(]\S*", "shell"      # zsh expands an unquoted `=word` to a command path (`==`, `===`)
+    elif scar.error_class == "zsh-nomatch":
+        lead = re.escape(scar.head[:-1]) if scar.head != "glob" else r"[^\s=]*"
+        pat, view = r"(?:^|\s)" + lead + r"\S*[*?]", "shell"
+    else:
+        toks = scar.head.split()
+        parts = [re.escape(t) + (r"[A-Za-z]?" if re.match(r"^-[A-Za-z]$", t) else "") for t in toks]   # -s also matches -sL
+        pat = CMD_POS + r"\s+".join(parts) + r"(?=\s|$)"
+        examples = [e.command for e in scar.failures + scar.corrected_calls if e.command]
+        if examples:   # every example shares a flag beyond the head (e.g. --force) → require it; plain `git push` stays allowed
+            common = set.intersection(*[set(c.split()) for c in examples]) - set(toks)
+            flags = sorted(t for t in common if t.startswith("-"))
+            if flags:   # anchored at ^ so each lookahead runs once per command (not once per position)
+                pat = "^" + "".join(rf"(?=[\s\S]*\s{re.escape(f)}(?:\s|$))" for f in flags) + r"[\s\S]*?" + pat
+    rec = scar.recoveries[-1].command if scar.recoveries else ""
+    if rec and principle:
+        principle = principle.rstrip() + f" Worked before: `{rec[:160]}`"
+    return {"id": scar.slug, "tool": scar.tool, "pattern": pat, "view": view, "unless": _unless(scar), "message": principle,
+            "evidence": {"failures": len(scar.failures), "corrections": len(scar.corrections), "sessions": len(scar.sessions),
+                         "recoveries": len(scar.recoveries)}}
+
+
+def _candidates(text: str) -> list:
+    """The command plus any `bash -c '…'` / `sh -lc "…"` payloads, so wrapped commands are checked too."""
+    return [text] + [m[1] for m in re.findall(r"\b(?:ba|z)?sh\s+-l?c\s+(['\"])(.*?)\1", text, re.S)]
 
 
 def rule_matches(rule: dict, tool: str, tool_input: dict) -> bool:
-    if rule["tool"] != tool:
+    if rule.get("tool") != tool:
         return False
     text = tool_input.get("command") or tool_input.get("url") or tool_input.get("file_path") or ""
-    return re.search(rule["pattern"], text) is not None
+    for t in _candidates(text):
+        if any(re.search(u, t) for u in rule.get("unless", [])):
+            continue
+        if re.search(rule["pattern"], shell_view(t) if rule.get("view") == "shell" else t):
+            return True
+    return False
+
+
+_CAUSE_ADVICE = {
+    "missing-command": "`{head}` is not installed on this machine",
+    "zsh-equals": "this shell is zsh: an unquoted word starting with `=` (`===`, `[ a == b ]`) is expanded as a command path and fails — quote it or use `[[ … ]]`",
+    "zsh-nomatch": "this shell is zsh: an unquoted glob that matches nothing (`{head}`) aborts the whole command — quote the pattern",
+}
 
 
 def template_principle(scar: Scar) -> str:
@@ -210,4 +349,13 @@ def template_principle(scar: Scar) -> str:
         why.append(f"failed {n}× ({scar.error_class}) across {len({e.session for e in scar.failures})} sessions")
     if c:
         why.append(f"was corrected by the human {c}×")
-    return f"Avoid `{scar.head}` here — it {' and '.join(why)}. Use the documented alternative instead, or ask first."
+    if scar.error_class == "timeout" and n:
+        return (f"`{scar.head}` ran until the tool timeout {n}× across {len({e.session for e in scar.failures})} sessions"
+                + (f" and was corrected by the human {c}×" if c else "") + " — bound the wait: a fixed retry count or a time limit.")
+    if scar.error_class in _CAUSE_ADVICE:
+        return _CAUSE_ADVICE[scar.error_class].format(head=scar.head).capitalize() + f" ({' and '.join(why)})."
+    examples = [e.command for e in scar.failures + scar.corrected_calls if e.command]
+    shared = sorted(t for t in set.intersection(*[set(x.split()) for x in examples]) - set(scar.head.split())
+                    if t.startswith("-")) if examples else []
+    said = f' The human said: "{scar.corrections[-1].text.strip()[:120]}".' if c else ""
+    return f"Avoid `{' '.join([scar.head] + shared)}` here — it {' and '.join(why)}.{said} Use the safer alternative, or ask first."

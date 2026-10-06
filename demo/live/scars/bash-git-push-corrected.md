@@ -1,6 +1,6 @@
 # Scar: git push (corrected)
 
-**Principle.** Avoid force-pushing main; use a normal push or open a pull request instead.
+**Principle.** Avoid `git push --force` here — it was corrected by the human 2×. The human said: "stop force pushing, I told you yesterday". Use the safer alternative, or ask first.
 
 **Signature.** `Bash:git push:corrected` — 0 failures, 2 corrections, 2 sessions.
 

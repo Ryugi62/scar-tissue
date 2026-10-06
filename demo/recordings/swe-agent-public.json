@@ -1,0 +1,29 @@
+{
+ "sessions": 2000,
+ "tool_calls": 54960,
+ "failures": 23520,
+ "corrections": 0,
+ "silent_failures": 0,
+ "signatures": 907,
+ "signatures_repeated_3plus": 321,
+ "scars": 193,
+ "root_cause_scars": 17,
+ "guard_rules": 12,
+ "demoted_by_self_validation": 6,
+ "already_guarded": 0,
+ "recoveries_learned": 86,
+ "bash_failures": 23520,
+ "bash_failures_matched_by_rules": 525,
+ "bash_successes": 31440,
+ "bash_successes_blocked": 6,
+ "_meta": {
+  "command": "scar stats swe_sample.jsonl --format swe-agent",
+  "run": "2026-10-06 15:34 KST",
+  "data": "2,000 rows of huggingface.co/datasets/nebius/SWE-agent-trajectories (CC-BY-4.0): 100 rows at each offset 0, 4000, \u2026, 76000 via the datasets-server rows API"
+ },
+ "_examples": [
+  "`edit` introduced a syntax error   6,212\u00d7 in 968 runs",
+  "`cd..` typed without a space       979\u00d7 in 25 runs",
+  "`ls.dvc` typed without a space   1,214\u00d7 in 6 runs"
+ ]
+}

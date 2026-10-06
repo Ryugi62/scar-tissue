@@ -41,9 +41,10 @@ class DemoScan(unittest.TestCase):
         self.ev = jsonl.read(DEMO)
         self.scars = detect(self.ev)
 
-    def test_exactly_three_seeded_scars(self):
+    def test_exactly_five_seeded_scars(self):
         sigs = sorted(s.signature for s in self.scars)
-        self.assertEqual(sigs, ["Bash:curl -s:exit", "Bash:git push:corrected", "Bash:pgrep -f:timeout"])
+        self.assertEqual(sigs, ["Bash:=word:zsh-equals", "Bash:curl -s:exit", "Bash:git push:corrected", "Bash:pgrep -f:timeout",
+                                "Bash:timeout:missing-command"])
 
     def test_rules_block_seeds_and_allow_safe(self):
         rules = [compile_rule(s, template_principle(s)) for s in self.scars]
@@ -58,8 +59,8 @@ class DemoScan(unittest.TestCase):
     def test_heal_and_guard(self):
         d = tempfile.mkdtemp()
         rules = application.heal(self.scars, d)
-        self.assertEqual(len(rules), 2)          # curl -s:exit stays advice — a non-zero exit is an outcome, not a habit
-        self.assertEqual(len(os.listdir(os.path.join(d, "scars"))), 3)
+        self.assertEqual(len(rules), 4)          # curl -s:exit stays advice — a non-zero exit is an outcome, not a habit
+        self.assertEqual(len(os.listdir(os.path.join(d, "scars"))), 5)
         guard = os.path.join(ROOT, "scar_tissue", "guard.py")
         hook = {"tool_name": "Bash", "tool_input": {"command": "until ! pgrep -f server; do sleep 1; done"}, "cwd": d}
         r = subprocess.run([sys.executable, guard], input=json.dumps(hook), capture_output=True, text=True)

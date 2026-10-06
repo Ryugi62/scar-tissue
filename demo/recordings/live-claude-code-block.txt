@@ -1,14 +1,49 @@
-$ cd scar-live            # a fresh project with .scar/rules.json from `scar heal` and the guard hook installed
-$ claude -p "Run exactly this bash command and report what happened: until ! pgrep -f build.py; do sleep 5; done" --allowedTools Bash
+$ cd demo/live    # .scar/rules.json from `scar heal demo/logs/events.jsonl`; .claude/settings.json = PreToolUse guard only
+$ python3 build.py &    # stand-in build, ~20 s
+$ claude -p 'A build is running in the background (python3 build.py, about 20 seconds). Wait for it to finish using: until ! pgrep -f build.py; do sleep 2; done — then print build/out.txt and tell me what happened.' --allowedTools Bash --output-format stream-json --verbose
 
-The command didn't run. A PreToolUse hook (`scar_tissue/guard.py`) blocked it before it started:
+# Rendered from the stream-json events of that run (2026-10-06, Claude Code 2.1.290). Tool calls and results are verbatim;
+# home path and username redacted; one unrelated closing line about a claude.ai connector omitted.
 
-> `[scar-tissue] blocked by scar bash-pgrep-f-timeout (4 failures, 0 corrections, 3 sessions): Avoid using pgrep -f loops that can run until timeout; instead, use bounded polling with a fixed retry count and sleep interval, then fail fast or proceed.`
+── agent → Bash ──
+$ until ! pgrep -f build.py; do sleep 2; done; echo done
 
-I didn't try to get around the hook.
+── BLOCKED by hook (exit 2) ──
+PreToolUse:Bash hook error: [python3 ~/dev/hack47-offgrid/scar_tissue/guard.py]: [scar-tissue] blocked by scar `bash-pgrep-f-timeout` (4 failures, 0 corrections, 3 sessions): `pgrep -f` ran until the tool timeout 4× across 3 sessions — bound the wait: a fixed retry count or a time limit. Worked before: `for i in $(seq 1 60); do pgrep -f '[b]uild.py' >/dev/null || break; sleep 5; done` (If you are sure this case is different, append `# scar-ok: <reason>` to the command.)
 
-The block makes sense here. `pgrep -f build.py` matches against full command lines, and the shell running this loop has `build.py` in its own command line. So `pgrep` would probably keep finding that shell and the loop would never end, even after the real `build.py` exits. That's likely how the four earlier failures happened.
+── agent → Bash ──
+$ for i in $(seq 1 60); do pgrep -f '[b]uild.py' >/dev/null || break; sleep 2; done; echo "waited ~$((i*2))s"; pgrep -fl '[b]uild.py' || echo "build.py not running"
 
-If you still want to wait for `build.py` to finish, a bounded version would avoid both problems:
+── result ──
+waited ~10s
+build.py not running
 
-    for i in {1..60}; do pgrep -f '[b]uild\.py' >/dev/null || { echo "build.py done"; exit 0; }; sleep 5; done; echo "timed out after 5 min"; exit 1
+── agent → Bash ──
+$ ls -la build/ 2>&1; echo ---; cat build/out.txt
+
+── result ──
+total 8
+drwxr-xr-x  3 user  staff   96 10월  6 15:22 .
+drwxr-xr-x  7 user  staff  224 10월  6 15:22 ..
+-rw-r--r--  1 user  staff   28 10월  6 15:22 out.txt
+---
+build ok: 42 files compiled
+
+── agent (final answer) ──
+The build finished successfully. `build/out.txt` says:
+
+```
+build ok: 42 files compiled
+```
+
+The process was gone after about 10 seconds of waiting, and `out.txt` was written at 15:22.
+
+I didn't run your wait command exactly as written. The repo's scar-tissue guard blocked it: the same `pgrep -f` wait has run until the tool timeout 4 times across 3 sessions. The cause is that `pgrep -f build.py` also matches the shell running the loop, because "build.py" is in that shell's own command line. So `pgrep` always finds something and the loop never exits.
+
+Instead I used a wait capped at 2 minutes with the pattern `'[b]uild.py'`. That pattern still finds the real build process but doesn't match its own command line. If you keep this snippet anywhere, use that form:
+
+```sh
+for i in $(seq 1 60); do pgrep -f '[b]uild.py' >/dev/null || break; sleep 2; done
+```
+
+# result: success · 4 turns · 23.1 s · model claude-opus-5-5

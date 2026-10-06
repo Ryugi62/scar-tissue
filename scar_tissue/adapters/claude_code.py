@@ -1,6 +1,6 @@
 """Adapter: Claude Code transcript JSONL (~/.claude/projects/<proj>/<session>.jsonl) → domain Events."""
 import json, os, glob
-from ..domain import Event, is_correction
+from ..domain import Event, is_correction, SHELL_ERR
 
 
 def _text(content):
@@ -40,7 +40,9 @@ def read_session(path):
                                 kind = "hook_block" if "hook error" in txt[:200] else "tool_error"
                             else:
                                 kind = "tool_ok"
-                            events.append(Event(ts, session, kind, tool, cmd, txt[:500]))
+                            # keep the head of the output + any shell error lines further down (silent part-failures)
+                            shell_err = SHELL_ERR.findall(txt[500:])[:3]
+                            events.append(Event(ts, session, kind, tool, cmd, "\n".join([txt[:500]] + shell_err)))
                 elif isinstance(content, str) and not d.get("isMeta") and not content.startswith("<"):
                     if is_correction(content):
                         events.append(Event(ts, session, "user_correction", "human", "", content[:300]))
@@ -49,7 +51,7 @@ def read_session(path):
 
 def read_dir(pattern):
     events, n = [], 0
-    for p in sorted(glob.glob(os.path.expanduser(pattern))):
+    for p in sorted(glob.glob(os.path.expanduser(pattern), recursive=True)):   # `**` reaches subagent transcripts
         n += 1
         events += read_session(p)
     return events, n
