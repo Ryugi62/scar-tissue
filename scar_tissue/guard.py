@@ -24,8 +24,11 @@ def main():
         except OSError:
             pass
         return 0
+    # unwrap `bash -c "…"` / `sh -lc '…'` so wrapped commands are checked too
+    inner = re.findall(r"\b(?:ba|z)?sh\s+-l?c\s+(['\"])(.*?)\1", text)
+    candidates = [text] + [m[1] for m in inner]
     for r in rules:
-        if r.get("tool") == tool and re.search(r["pattern"], text):
+        if r.get("tool") == tool and any(re.search(r["pattern"], t) for t in candidates):
             ev = r.get("evidence", {})
             sys.stderr.write(f"[scar-tissue] blocked by scar `{r['id']}` ({ev.get('failures', 0)} failures, "
                              f"{ev.get('corrections', 0)} corrections, {ev.get('sessions', 0)} sessions): {r['message']} (If you are sure this case is different, append `# scar-ok: <reason>` to the command.)\n")

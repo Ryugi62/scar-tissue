@@ -1,6 +1,6 @@
 # Scar: git push (corrected)
 
-**Principle.** Never force-push main; always use a normal push or open a branch and pull request instead.
+**Principle.** Never force-push main; use a normal push or create a new branch instead.
 
 **Signature.** `Bash:git push:corrected` — 0 failures, 2 corrections, 2 sessions.
 

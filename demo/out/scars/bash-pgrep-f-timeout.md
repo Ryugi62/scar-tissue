@@ -1,6 +1,6 @@
 # Scar: pgrep -f (timeout)
 
-**Principle.** Avoid long-running pgrep polling loops that hit timeouts; instead, use a bounded timeout, check process status less frequently, or switch to event/log-based completion detection.
+**Principle.** Avoid long-running `pgrep -f` polling loops that hit timeouts; instead, check once, use bounded retries with short sleeps, or watch a known PID/log for completion.
 
 **Signature.** `Bash:pgrep -f:timeout` — 4 failures, 0 corrections, 3 sessions.
 

@@ -1,10 +1,10 @@
 # Scar: curl -s (exit)
 
-**Principle.** Avoid relying on `curl -s` piped to `grep` for validation; use a request that checks status/content explicitly and handle missing matches without failing the command.
+**Principle.** Avoid `curl -s` here — it failed 3× (exit) across 2 sessions. Use the documented alternative instead, or ask first.
 
 **Signature.** `Bash:curl -s:exit` — 3 failures, 0 corrections, 2 sessions.
 
-**Guard.** PreToolUse rule `bash-curl-s-exit` blocks `Bash` calls matching `(?:^|[;&|(!]\s*|\b(?:do|then|until|while|if)\s+)curl\s+\-s[A-Za-z]?(?=\s|$)`.
+**Advice only.** Too broad for an automatic block (already guarded, a whole tool, or a generic command) — review by hand.
 
 ## Evidence
 - 2026-10-02T11:00 · session `s2` · tool_error · `curl -s https://example-hackathon.dev/rules | grep prize`

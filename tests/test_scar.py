@@ -67,6 +67,9 @@ class DemoScan(unittest.TestCase):
         hook["tool_input"]["command"] = "ls -la"
         r = subprocess.run([sys.executable, guard], input=json.dumps(hook), capture_output=True, text=True)
         self.assertEqual(r.returncode, 0); self.assertEqual(r.stderr, "")
+        hook["tool_input"]["command"] = "bash -c 'until ! pgrep -f srv; do sleep 1; done'"
+        r = subprocess.run([sys.executable, guard], input=json.dumps(hook), capture_output=True, text=True)
+        self.assertEqual(r.returncode, 2)          # wrapped commands are unwrapped and checked
         # escape hatch: proceed once with a stated reason, and the override is logged
         hook["tool_input"]["command"] = "pgrep -f '[b]uild.py' # scar-ok: bracket pattern cannot match itself"
         r = subprocess.run([sys.executable, guard], input=json.dumps(hook), capture_output=True, text=True)

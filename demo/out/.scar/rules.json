@@ -4,7 +4,7 @@
    "id": "bash-pgrep-f-timeout",
    "tool": "Bash",
    "pattern": "(?:^|[;&|(!]\\s*|\\b(?:do|then|until|while|if)\\s+)pgrep\\s+\\-f[A-Za-z]?(?=\\s|$)",
-   "message": "Avoid long-running pgrep polling loops that hit timeouts; instead, use a bounded timeout, check process status less frequently, or switch to event/log-based completion detection.",
+   "message": "Avoid long-running `pgrep -f` polling loops that hit timeouts; instead, check once, use bounded retries with short sleeps, or watch a known PID/log for completion.",
    "evidence": {
     "failures": 4,
     "corrections": 0,
@@ -15,21 +15,10 @@
    "id": "bash-git-push-corrected",
    "tool": "Bash",
    "pattern": "(?=.*\\s\\-\\-force(?:\\s|$))(?:^|[;&|(!]\\s*|\\b(?:do|then|until|while|if)\\s+)git\\s+push(?=\\s|$)",
-   "message": "Never force-push main; always use a normal push or open a branch and pull request instead.",
+   "message": "Never force-push main; use a normal push or create a new branch instead.",
    "evidence": {
     "failures": 0,
     "corrections": 2,
-    "sessions": 2
-   }
-  },
-  {
-   "id": "bash-curl-s-exit",
-   "tool": "Bash",
-   "pattern": "(?:^|[;&|(!]\\s*|\\b(?:do|then|until|while|if)\\s+)curl\\s+\\-s[A-Za-z]?(?=\\s|$)",
-   "message": "Avoid relying on `curl -s` piped to `grep` for validation; use a request that checks status/content explicitly and handle missing matches without failing the command.",
-   "evidence": {
-    "failures": 3,
-    "corrections": 0,
     "sessions": 2
    }
   }

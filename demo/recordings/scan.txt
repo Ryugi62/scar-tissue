@@ -1,4 +1,4 @@
 3 sessions · 35 events · 3 scars
   ✱ [GUARD ] Bash:pgrep -f:timeout                                        failures=4 corrections=0 sessions=3
   ✱ [GUARD ] Bash:git push:corrected                                      failures=0 corrections=2 sessions=2
-  ✱ [GUARD ] Bash:curl -s:exit                                            failures=3 corrections=0 sessions=2
+  ✱ [advice] Bash:curl -s:exit                                            failures=3 corrections=0 sessions=2

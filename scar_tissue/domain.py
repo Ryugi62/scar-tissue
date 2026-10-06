@@ -160,9 +160,10 @@ def detect(events: list[Event]) -> list[Scar]:
 def validate_against_history(scars, events, max_rate=0.005, max_count=3):
     """Self-validation: replay every candidate rule against the agent's own SUCCESSFUL calls.
     A rule that would have blocked normal work more than max_count times (or > max_rate of successful calls) is demoted to advice."""
+    corrected = {id(c) for sc in scars for c in sc.corrected_calls}   # calls the human corrected are not "normal work"
     ok = {}
     for e in events:
-        if e.kind == "tool_ok" and e.command:
+        if e.kind == "tool_ok" and e.command and id(e) not in corrected:
             ok.setdefault(e.tool, []).append(e.command)
     report = []
     for s in scars:
