@@ -54,7 +54,7 @@ One frozen run over every Claude Code transcript on my machine (`demo/recordings
 
 (21 failed commands trip both rules; they are counted once in the 2,836.) The agent kept writing bash in a zsh shell, and every session started fresh, so it never learned. A loud failure was cheap: the median cost one extra call (~4 s) before the agent fixed it. The silent ones are the expensive ones (above).
 
-**Is it still happening?** zsh failures per 1,000 shell calls: 55 (Sep 4–9) → 40 (Sep 10–19) → 37 (Sep 20–30) → 29 (Oct 1–6). The rate is falling, but it still happened 853 times in the first six days of October. In 4 short fresh sessions with today's model the agent made none (pilot in `demo/ab/`) — the habit lives in long, busy sessions.
+**Is it still happening?** zsh failures per 1,000 shell calls: 52 (Sep 4–9) → 39 (Sep 10–19) → 36 (Sep 20–30) → 29 (Oct 1–6). The rate is falling, but it still happened 853 times in the first six days of October. In 4 short fresh sessions with today's model the agent made none (pilot in `demo/ab/`) — the habit lives in long, busy sessions.
 
 **Couldn't I just change a shell option?** Yes — `setopt NO_NOMATCH` and `unsetopt EQUALS` remove these two, and `scar report` prints exactly those lines. I didn't know I needed them until the logs said so. That is the job: find the few things worth fixing in 150,000 tool calls, then fix each at the right layer — the environment, a guard, or advice at session start. The guard is for what an option can't fix (a missing binary, a wait loop that hangs, a push a human said no to) and for machines where you don't want to change your own shell.
 
