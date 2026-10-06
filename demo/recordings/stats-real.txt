@@ -1,10 +1,10 @@
-sessions (subagents folded into their parent)  1,458
-tool calls                                     152,289
-failed tool calls                              7,017
-silent failures (exit 0, shell error)          2,366
+sessions (subagents folded into their parent)  1,476
+tool calls                                     152,618
+failed tool calls                              7,040
+silent failures (exit 0, shell error)          2,202
 scars                                          165
 automatic guard rules                          2
 demoted by self-validation                     10
 
-failed shell commands the rules match          2,812 of 6,188  (45.4%)
-successful commands they would block           14 of 94,445  (0.01%)
+failed shell commands the rules match          2,836 of 6,036  (47.0%)
+successful commands they would block           18 of 94,821  (0.02%)

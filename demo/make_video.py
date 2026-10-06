@@ -95,7 +95,7 @@ def main():
         "  same result with the demotion ratio at 10, 20 or 50 (sensitivity-real.json)",
         "", "silent failures — exit 0, but zsh aborted the search:",
         f"  --include=* failures that exited 0          {inc['matched_silent']:,} of {inc['matched_failures']:,}",
-        f"  ...never re-run: agent moved on, 'nothing found'   {fc['bash-include-zsh-nomatch']['silent_never_fixed']}",
+        f"  ...not retried within the next 6 calls          {fc['bash-include-zsh-nomatch']['silent_never_fixed']}",
         "", f"zsh failures per 1,000 shell calls: " + " → ".join(f"{t['per_1000']:.0f}" for t in stats["zsh_trend_per_1000_bash_calls"]) + f"  ({stats['zsh_trend_per_1000_bash_calls'][0]['from'][5:]} → {stats['zsh_trend_per_1000_bash_calls'][-1]['to'][5:]})",
     ])
     tests = run("python3 -m unittest discover -s tests 2>&1 | tail -3")
@@ -112,7 +112,7 @@ def main():
         (slide_title("Scar Tissue", "Your AI coding agent's repeated mistakes become guardrails — learned from its own logs."),
          f"Coding agents start every session fresh, so they repeat the same mistakes, and some of them look like success. On my laptop, {stats['silent_failures']:,} shell commands exited zero while the shell had printed an error. Scar Tissue catches those on day one, and learns guardrails for the habits that repeat."),
         (slide_term("1 · day one: the silent-failure alarm (PostToolUse, no history needed)", "claude -p \"… Use exactly: grep -rn TODO . --include=*.md | head …\"   # prompted", alarm, highlight=("PostToolUse", "scar-tissue")),
-         f"Here zsh aborts the grep, but the call still exits zero. The alarm tells the agent that part of the command did not run. It quotes the glob, runs it again, and gets the answer. With the error buried in other output, agents without the alarm stopped without an answer in {score('buried', 'no-alarm')} runs; with it, {score('buried', 'alarm')} answered correctly."),
+         f"Here zsh aborts the grep, but the call still exits zero. The alarm tells the agent that part of the command did not run. It quotes the glob, runs it again, and gets the answer. With the error buried in other output, agents without the alarm answered correctly in {score('buried', 'no-alarm')} runs; with it, {score('buried', 'alarm')}. Small numbers, but a clear direction."),
         (slide_term("2 · scan + heal (bundled synthetic demo logs, no network)", "pipx install git+https://github.com/Ryugi62/scar-tissue && scar demo", scan_part),
          "For habits that repeat, scan reads the agent's session logs. A failure that repeats across sessions becomes a scar. When the error text names the cause, like an unquoted equals sign in zsh or a missing binary, the cause becomes the signature."),
         (slide_term("3 · the guard: same habit blocked, the agent's own fix allowed (synthetic demo rules)", "scar demo   # (continued)", "3) guard" + guard_part, highlight=("BLOCKED",)),
@@ -120,9 +120,9 @@ def main():
         (slide_term("4 · every transcript on my laptop (aggregate counts only)", "scar stats '~/.claude/projects/**/*.jsonl' --table", stats_txt, highlight=("of",)),
          f"On my own logs: {stats['sessions']:,} sessions and {stats['tool_calls'] // 1000} thousand tool calls. Two learned rules match {pct(stats['bash_failures_matched_by_rules'], stats['bash_failures'])} of the agent's failed shell commands, and would block {stats['bash_successes_blocked']} of {stats['bash_successes'] // 1000} thousand successful ones. Both are zsh habits the agent never unlearned."),
         (slide_term("5 · would it have helped? learn from the past, replay the future", "scar holdout '~/.claude/projects/**/*.jsonl'   (+ failure_cost, trend from stats-real.json)", hold_txt),
-         f"Learned only from earlier sessions, the rules would have blocked {pct(hold['test_failures_blocked'], hold['test_failures'])} of later failures, with nine wrong blocks in fifty-six thousand calls. And {fc['bash-include-zsh-nomatch']['silent_never_fixed']} times a search was aborted, printed nothing, and the agent moved on."),
+         f"Learned only from earlier sessions, the rules would have blocked {pct(hold['test_failures_blocked'], hold['test_failures'])} of later failures, with {hold['test_successes_blocked']} wrong blocks in {hold['test_successes'] // 1000} thousand calls. And {fc['bash-include-zsh-nomatch']['silent_never_fixed']} times a search was aborted, printed nothing, and the agent did not retry it."),
         (slide_term("6 · scar report — a read-only first step (synthetic demo logs)", "scar report demo/logs/events.jsonl", report),
-         "Start read-only: scar report shows what your agent keeps getting wrong, what worked, and the one-line shell fixes. Then heal and install. Standard library only, sixty-two tests. Next: Codex and Cursor adapters, and team scars shared through the repo."),
+         "Start read-only: scar report shows what your agent keeps getting wrong, what worked, and the one-line shell fixes. Then heal and install. Standard library only, sixty-nine tests. Next: Codex and Cursor adapters, and team scars shared through the repo."),
     ]
     clips = []
     for i, (img, vo) in enumerate(scenes):

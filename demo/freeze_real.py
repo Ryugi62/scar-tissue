@@ -52,4 +52,10 @@ if len(sys.argv) > 2:
     sw["_meta"] = {"command": "scar stats rows.jsonl --format swe-agent", "run": now,
                    "data": "2,000 rows of huggingface.co/datasets/nebius/SWE-agent-trajectories (CC-BY-4.0): 100 rows at offsets 0, 4000, …, 76000"}
     json.dump(sw, open(os.path.join(OUT, "swe-agent-public.json"), "w"), indent=1)
+if len(sys.argv) > 3:   # another person's public Claude Code transcripts (same adapter, unchanged)
+    ev3, n3 = claude_code.read_dir(sys.argv[3])
+    wi = application.stats(ev3, n3)
+    wi["_meta"] = {"command": "scar stats '<wisp transcripts>/**/*.jsonl'", "run": now,
+                   "data": "huggingface.co/datasets/crispwisp/wisp-claude-code-sessions (MIT), all 104 transcript files"}
+    json.dump(wi, open(os.path.join(OUT, "wisp-public.json"), "w"), indent=1)
 print("frozen", now)

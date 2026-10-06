@@ -1,74 +1,74 @@
 {
- "sessions": 1458,
- "tool_calls": 152289,
- "failures": 7017,
+ "sessions": 1476,
+ "tool_calls": 152618,
+ "failures": 7040,
  "corrections": 5,
- "silent_failures": 2366,
- "signatures": 700,
+ "silent_failures": 2202,
+ "signatures": 704,
  "signatures_repeated_3plus": 169,
  "scars": 165,
  "root_cause_scars": 12,
  "guard_rules": 2,
  "demoted_by_self_validation": 10,
  "already_guarded": 49,
- "recoveries_learned": 1904,
- "bash_failures": 6188,
- "bash_failures_exit_nonzero": 3822,
- "bash_failures_matched_by_rules": 2812,
- "bash_failures_matched_by_2plus_rules": 20,
- "bash_failures_matched_exit_nonzero": 1539,
- "bash_successes": 94445,
- "bash_successes_blocked": 14,
+ "recoveries_learned": 1918,
+ "bash_failures": 6036,
+ "bash_failures_exit_nonzero": 3834,
+ "bash_failures_matched_by_rules": 2836,
+ "bash_failures_matched_by_2plus_rules": 21,
+ "bash_failures_matched_exit_nonzero": 1545,
+ "bash_successes": 94821,
+ "bash_successes_blocked": 18,
  "rules": [
   {
    "id": "bash-word-zsh-equals",
    "signature": "Bash:=word:zsh-equals",
    "sessions": 319,
-   "matched_failures": 1594,
-   "matched_exit_nonzero": 1523,
-   "matched_silent": 71,
+   "matched_failures": 1601,
+   "matched_exit_nonzero": 1529,
+   "matched_silent": 72,
    "successes_blocked": 3,
-   "recoveries": 1080
+   "recoveries": 1079
   },
   {
    "id": "bash-include-zsh-nomatch",
    "signature": "Bash:--include=*:zsh-nomatch",
-   "sessions": 456,
-   "matched_failures": 1238,
+   "sessions": 473,
+   "matched_failures": 1256,
    "matched_exit_nonzero": 35,
-   "matched_silent": 1203,
-   "successes_blocked": 11,
-   "recoveries": 824
+   "matched_silent": 1221,
+   "successes_blocked": 15,
+   "recoveries": 839
   }
  ],
  "failure_cost": {
   "bash-word-zsh-equals": {
-   "matched": 1594,
-   "recovered": 1329,
-   "median_calls_to_fix": 1,
+   "matched": 1601,
+   "recovered": 1336,
+   "median_calls_to_fix": 1.0,
    "median_seconds_to_fix": 4,
    "silent_never_fixed": 17
   },
   "bash-include-zsh-nomatch": {
-   "matched": 1238,
-   "recovered": 870,
+   "matched": 1256,
+   "recovered": 892,
    "median_calls_to_fix": 1.0,
    "median_seconds_to_fix": 4,
-   "silent_never_fixed": 356
+   "silent_never_fixed": 353
   }
  },
  "demoted": [
   {
    "signature": "Bash:glob:zsh-nomatch",
-   "failures": 875,
-   "sessions": 216,
-   "would_block_successes": 8407,
-   "blocks_own_fix": 113
+   "failures": 732,
+   "sessions": 203,
+   "would_block_successes": 8588,
+   "blocks_own_fix": 98
   },
   {
    "signature": "Bash:timeout:missing-command",
-   "failures": 311,
-   "sessions": 139,
+   "failures": 299,
+   "sessions": 133,
    "would_block_successes": 117,
    "blocks_own_fix": 0
   },
@@ -90,14 +90,14 @@
    "signature": "Bash:ffprobe:missing-command",
    "failures": 24,
    "sessions": 11,
-   "would_block_successes": 6,
+   "would_block_successes": 7,
    "blocks_own_fix": 0
   },
   {
    "signature": "Bash:fc-list:missing-command",
    "failures": 4,
    "sessions": 4,
-   "would_block_successes": 56,
+   "would_block_successes": 57,
    "blocks_own_fix": 0
   },
   {
@@ -115,61 +115,61 @@
    "blocks_own_fix": 2
   },
   {
-   "signature": "Bash:ffmpeg:missing-command",
-   "failures": 4,
-   "sessions": 3,
-   "would_block_successes": 8,
-   "blocks_own_fix": 0
-  },
-  {
    "signature": "Bash:pdffonts:missing-command",
    "failures": 3,
    "sessions": 2,
    "would_block_successes": 2,
+   "blocks_own_fix": 0
+  },
+  {
+   "signature": "Bash:ffmpeg:missing-command",
+   "failures": 3,
+   "sessions": 2,
+   "would_block_successes": 8,
    "blocks_own_fix": 0
   }
  ],
  "top_scars": [
   {
    "signature": "Bash:=word:zsh-equals",
-   "failures": 1578,
+   "failures": 1571,
    "corrections": 0,
    "sessions": 319,
    "guard": true
   },
   {
    "signature": "Bash:--include=*:zsh-nomatch",
-   "failures": 1211,
+   "failures": 1223,
    "corrections": 0,
-   "sessions": 456,
+   "sessions": 473,
    "guard": true
   },
   {
    "signature": "Bash:glob:zsh-nomatch",
-   "failures": 875,
+   "failures": 732,
    "corrections": 0,
-   "sessions": 216,
+   "sessions": 203,
    "guard": false
   },
   {
    "signature": "mcp__aside__repl:mcp__aside__repl:error",
-   "failures": 637,
+   "failures": 641,
    "corrections": 0,
    "sessions": 50,
    "guard": false
   },
   {
-   "signature": "Bash:timeout:missing-command",
-   "failures": 311,
+   "signature": "Agent:Agent:blocked",
+   "failures": 305,
    "corrections": 0,
-   "sessions": 139,
+   "sessions": 17,
    "guard": false
   },
   {
-   "signature": "Agent:Agent:blocked",
-   "failures": 304,
+   "signature": "Bash:timeout:missing-command",
+   "failures": 299,
    "corrections": 0,
-   "sessions": 17,
+   "sessions": 133,
    "guard": false
   },
   {
@@ -181,7 +181,7 @@
   },
   {
    "signature": "Bash:sleep:blocked",
-   "failures": 220,
+   "failures": 221,
    "corrections": 0,
    "sessions": 81,
    "guard": false
@@ -203,7 +203,7 @@
  ],
  "_meta": {
   "command": "scar stats '~/.claude/projects/**/*.jsonl'",
-  "run": "2026-10-06 16:33 KST",
+  "run": "2026-10-06 16:53 KST",
   "scope": "every Claude Code transcript on the author's laptop; subagent transcripts folded into their parent session"
  },
  "zsh_trend_per_1000_bash_calls": [
@@ -211,29 +211,29 @@
    "from": "2026-09-04",
    "to": "2026-09-09",
    "bash_calls": 4786,
-   "zsh_failures": 262,
-   "per_1000": 54.7
+   "zsh_failures": 250,
+   "per_1000": 52.2
   },
   {
    "from": "2026-09-10",
    "to": "2026-09-19",
    "bash_calls": 11333,
-   "zsh_failures": 458,
-   "per_1000": 40.4
+   "zsh_failures": 442,
+   "per_1000": 39.0
   },
   {
    "from": "2026-09-20",
    "to": "2026-09-30",
    "bash_calls": 55432,
-   "zsh_failures": 2057,
-   "per_1000": 37.1
+   "zsh_failures": 1981,
+   "per_1000": 35.7
   },
   {
    "from": "2026-10-01",
    "to": "2026-10-06",
-   "bash_calls": 29082,
-   "zsh_failures": 887,
-   "per_1000": 30.5
+   "bash_calls": 29306,
+   "zsh_failures": 853,
+   "per_1000": 29.1
   }
  ]
 }

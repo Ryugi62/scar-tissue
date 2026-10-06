@@ -1,20 +1,20 @@
 {
- "sessions_with_timestamped_events": 934,
- "train_sessions": 653,
- "test_sessions": 281,
+ "sessions_with_timestamped_events": 952,
+ "train_sessions": 666,
+ "test_sessions": 286,
  "guard_rules": 2,
  "rule_ids": [
   "bash-word-zsh-equals",
   "bash-include-zsh-nomatch"
  ],
- "test_failures": 3623,
- "test_failures_blocked": 1509,
- "test_successes": 56357,
- "test_successes_blocked": 9,
- "sessions_total": 1458,
+ "test_failures": 3510,
+ "test_failures_blocked": 1524,
+ "test_successes": 56463,
+ "test_successes_blocked": 12,
+ "sessions_total": 1476,
  "_meta": {
   "command": "scar holdout '~/.claude/projects/**/*.jsonl'",
-  "run": "2026-10-06 16:33 KST",
+  "run": "2026-10-06 16:53 KST",
   "method": "learn from the earliest 70% of sessions (by first timestamp), replay the later 30%; Bash calls only"
  }
 }

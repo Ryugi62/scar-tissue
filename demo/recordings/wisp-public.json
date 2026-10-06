@@ -1,0 +1,39 @@
+{
+ "sessions": 103,
+ "tool_calls": 2207,
+ "failures": 103,
+ "corrections": 4,
+ "silent_failures": 3,
+ "signatures": 79,
+ "signatures_repeated_3plus": 6,
+ "scars": 1,
+ "root_cause_scars": 0,
+ "guard_rules": 0,
+ "demoted_by_self_validation": 0,
+ "already_guarded": 0,
+ "recoveries_learned": 0,
+ "bash_failures": 68,
+ "bash_failures_exit_nonzero": 65,
+ "bash_failures_matched_by_rules": 0,
+ "bash_failures_matched_by_2plus_rules": 0,
+ "bash_failures_matched_exit_nonzero": 0,
+ "bash_successes": 1347,
+ "bash_successes_blocked": 0,
+ "rules": [],
+ "failure_cost": {},
+ "demoted": [],
+ "top_scars": [
+  {
+   "signature": "Edit:/home/me/.claude/projects/-home-me/memory/MEMORY.md:error",
+   "failures": 4,
+   "corrections": 0,
+   "sessions": 2,
+   "guard": false
+  }
+ ],
+ "_meta": {
+  "command": "scar stats '<wisp transcripts>/**/*.jsonl'",
+  "run": "2026-10-06 16:53 KST",
+  "data": "huggingface.co/datasets/crispwisp/wisp-claude-code-sessions (MIT), all 104 transcript files"
+ }
+}

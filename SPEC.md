@@ -29,7 +29,7 @@ AI coding agents (Claude Code, Codex, …) run for hours on a developer's own ma
 - Does not judge whether a scar is "right" — the human reviews `scars/*.md` (they are plain markdown, committed with the project).
 
 ## Architecture
-`scar_tissue/domain.py` (signatures, clustering, rule compilation — pure) ← `application.py` (scan/heal use cases) ← `adapters/` (Claude Code transcript reader, generic JSONL reader, OpenAI phrasing) ← `cli.py`. `guard.py` is a standalone stdlib script.
+`scar_tissue/domain.py` (signatures, clustering, rule compilation — pure) ← `application.py` (scan/heal use cases) ← `adapters/` (Claude Code transcript reader, generic JSONL reader, OpenAI phrasing) ← `cli.py`. `guard.py` is a stdlib-only script that imports the package's pure matcher (`scar_tissue.domain`, `scar_tissue.shell`) from its own install location.
 
 ## v2 — root causes and recoveries (2026-10-06)
 Problem found on real logs: most repeated failures are *environment* mistakes that the command head hides (`echo === Done ===` fails in zsh; `timeout` does not exist on macOS) — and a rule must never block the fix the agent already found.
@@ -66,3 +66,8 @@ Problem found on real logs: most repeated failures are *environment* mistakes th
 - Wrapper options per wrapper (`env -i` takes no value), `parallel`, `find -exec`, `eval '…'` payloads; substitutions inherit their loop; `git --git-dir x push`, `+refspec` = force; `noglob` disables the nomatch rule; only `==`-words trip zsh-equals (`=ls` is valid zsh).
 - A scar learned from human corrections cannot be overridden by the agent (`# scar-ok` is refused; ask the human).
 - Cost-benefit without a floor: any wrong block must be paid for by ≥ 20 stopped mistakes.
+
+## v5 — third review (2026-10-06)
+- The alarm fires only when the command confirms the cause (the unquoted glob word, the `==` word, the missing command is really invoked), not for text a reader printed (`cat ci.log`), not for a deliberate `x … || y …` fallback, and once per command per session (`.scar/alarms.jsonl`). The same confirmation defines "silent failure" in every statistic.
+- `command -v`, `type`, `which` are probes, not invocations.
+- The A/B grader counts an answer as correct when it cites both grep hits (`docs/setup.md:2`, `docs/faq.md:2`).

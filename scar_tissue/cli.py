@@ -47,6 +47,14 @@ def demo():
         print(f"   {'BLOCKED' if r.returncode == 2 else 'allowed'}  {cmd}   # {note}")
         if r.returncode == 2:
             print("            ↳ " + r.stderr.strip().split(": ", 1)[-1][:230])
+    cmd, out = "grep -rn TODO . --include=*.md | head", "(eval):1: no matches found: --include=*.md"
+    hook = {"hook_event_name": "PostToolUse", "session_id": "demo", "tool_name": "Bash", "tool_input": {"command": cmd},
+            "tool_response": {"stdout": out, "stderr": ""}, "cwd": d}
+    r = subprocess.run([sys.executable, os.path.join(HERE, "guard.py")], input=json.dumps(hook), capture_output=True, text=True)
+    print("\n4) alarm (the same script as a PostToolUse hook — no history needed):")
+    print(f"   {'ALARM  ' if r.returncode == 2 else 'quiet  '}  {cmd}   # exited 0, printed only `{out}`")
+    if r.returncode == 2:
+        print("            ↳ " + r.stderr.strip().split("] ", 1)[-1][:230])
     return 0
 
 

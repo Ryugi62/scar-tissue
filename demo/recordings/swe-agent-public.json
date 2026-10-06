@@ -325,7 +325,7 @@
  ],
  "_meta": {
   "command": "scar stats rows.jsonl --format swe-agent",
-  "run": "2026-10-06 16:33 KST",
+  "run": "2026-10-06 16:53 KST",
   "data": "2,000 rows of huggingface.co/datasets/nebius/SWE-agent-trajectories (CC-BY-4.0): 100 rows at offsets 0, 4000, \u2026, 76000"
  }
 }

@@ -64,10 +64,30 @@ SHELL_ERR = re.compile(r"(?:\(eval\)|(?<![\w/.-])(?:zsh|bash)):\d+: [^\n]*"     
 
 
 @lru_cache(maxsize=65536)
-def silent_root_cause(text: str):
-    """A call that exited 0 can still have failed part-way: only a shell-prefixed error line counts (`(eval):1: …`, `zsh:3: …`)."""
-    lines = "\n".join(SHELL_ERR.findall(text or ""))
-    return root_cause(lines) if lines else None
+def silent_root_cause(text: str, command: str | None = None):
+    """A call that exited 0 can still have failed part-way: a shell-prefixed error line (`(eval):1: …`, `zsh:3: …`,
+    `bash: line 1: …`) whose cause the command itself confirms — so `cat ci.log` printing such a line, or a deliberate
+    `rg … || grep …` fallback, is not a failure. Without a command, only the output is checked (older callers)."""
+    for line in SHELL_ERR.findall(text or ""):
+        rc = root_cause(line)
+        if rc and (command is None or _confirms(command, rc, line)):
+            return rc
+    return None
+
+
+def _confirms(command: str, rc, line: str) -> bool:
+    cls, head = rc
+    cs = parse(command)
+    if cls == "zsh-nomatch":
+        tok = (re.search(r"no matches found: (\S+)", line) or [None, ""])[1]
+        return any(w == tok and c.unquoted_glob(i) for c in cs for i, w in enumerate(c.words))
+    if cls == "zsh-equals":
+        return any(c.shell == "zsh" and not c.test and c.unquoted_equals_word(i) for c in cs for i in range(len(c.words)))
+    if cls == "missing-command":
+        if re.search(r"(?:^|[;&|(\s])" + re.escape(head) + r"\b[^;&|\n]*\|\|", command):   # `rg … || grep …` is a fallback
+            return False
+        return any(_command_hits({"kind": "missing-command", "name": head}, c) for c in cs)
+    return True
 
 
 @dataclass(frozen=True)
@@ -166,7 +186,7 @@ def error_class(text: str) -> str:
 
 
 def signature(ev: Event) -> tuple[str, str, str]:
-    rc = root_cause(ev.text) if ev.kind == "tool_error" else silent_root_cause(ev.text) if ev.kind == "tool_ok" else None
+    rc = root_cause(ev.text) if ev.kind == "tool_error" else silent_root_cause(ev.text, ev.command) if ev.kind == "tool_ok" else None
     if rc:
         return ev.tool, rc[1], rc[0]
     head = command_head(ev.command) if ev.command else ev.tool
@@ -202,7 +222,7 @@ def detect(events: list[Event]) -> list[Scar]:
     pending: dict[str, list] = {}    # session → [(scar key, tool, head, calls left)]
     failed: dict = {}                 # (scar key, head) → the latest failing command
     for ev in events:
-        silent = ev.kind == "tool_ok" and silent_root_cause(ev.text) is not None
+        silent = ev.kind == "tool_ok" and silent_root_cause(ev.text, ev.command) is not None
         if ev.kind in ("tool_error", "hook_block", "tool_ok") and ev.command:
             last_call[ev.session] = ev
             waiting = []
@@ -262,7 +282,7 @@ def validate_against_history(scars, events, max_rate=0.005, max_count=3):
     corrected = {id(c) for sc in scars for c in sc.corrected_calls}   # calls the human corrected are not "normal work"
     ok = {}
     for e in events:
-        if e.kind == "tool_ok" and e.command and id(e) not in corrected and silent_root_cause(e.text) is None:
+        if e.kind == "tool_ok" and e.command and id(e) not in corrected and silent_root_cause(e.text, e.command) is None:
             ok.setdefault(e.tool, []).append(e.command)
     report = []
     for s in scars:
@@ -423,6 +443,9 @@ def _head_hit(rule: dict, c) -> bool:
 def _command_hits(rule: dict, c) -> bool:
     kind = rule.get("kind", "head")
     if kind == "missing-command":
+        if c.words and (c.words[0] in ("type", "which", "whence", "hash", "where") or
+                        (c.words[0] == "command" and len(c.words) > 1 and c.words[1] in ("-v", "-V"))):
+            return False                                  # asking whether it exists is not running it
         chain, k = _chain(c.words)
         return rule["name"] in chain or (k < len(c.words) and c.words[k].rsplit("/", 1)[-1] == rule["name"])
     if kind in ("zsh-equals", "zsh-nomatch"):

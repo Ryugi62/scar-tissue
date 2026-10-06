@@ -54,8 +54,8 @@ def _bash_outcomes(events, corrected=frozenset()):
     """(failed Bash calls incl. silent part-failures, normal successful Bash calls) — the denominators every number uses."""
     from .domain import silent_root_cause
     fails = [e for e in events if e.tool == "Bash" and e.command and
-             (e.kind == "tool_error" or (e.kind == "tool_ok" and silent_root_cause(e.text)))]
-    oks = [e for e in events if e.tool == "Bash" and e.kind == "tool_ok" and e.command and not silent_root_cause(e.text)
+             (e.kind == "tool_error" or (e.kind == "tool_ok" and silent_root_cause(e.text, e.command)))]
+    oks = [e for e in events if e.tool == "Bash" and e.kind == "tool_ok" and e.command and not silent_root_cause(e.text, e.command)
            and id(e) not in corrected]
     return fails, oks
 
@@ -84,12 +84,12 @@ def failure_cost(events, rules, window=6):
         calls, secs, matched, rec, never = [], [], 0, 0, 0
         for seq in by_session.values():
             for i, e in enumerate(seq):
-                failed = e.kind == "tool_error" or silent_root_cause(e.text)
+                failed = e.kind == "tool_error" or silent_root_cause(e.text, e.command)
                 if not failed or not rule_matches(r, "Bash", {"command": e.command}):
                     continue
                 matched += 1
                 fix = next((j for j in range(i + 1, min(len(seq), i + 1 + window))
-                            if seq[j].kind == "tool_ok" and not silent_root_cause(seq[j].text)
+                            if seq[j].kind == "tool_ok" and not silent_root_cause(seq[j].text, seq[j].command)
                             and not rule_matches(r, "Bash", {"command": seq[j].command})
                             and _related(e.command, seq[j].command)), None)
                 if fix is None:
@@ -158,7 +158,7 @@ def stats(events, n_sessions):
     overlap = sum(1 for e in matched if sum(rule_matches(r, e.tool, {"command": e.command}) for r in rules) > 1)
     return {"sessions": n_sessions, "tool_calls": kinds["tool_ok"] + kinds["tool_error"] + kinds["hook_block"],
             "failures": kinds["tool_error"] + kinds["hook_block"], "corrections": kinds["user_correction"],
-            "silent_failures": sum(1 for e in events if e.kind == "tool_ok" and silent_root_cause(e.text)),
+            "silent_failures": sum(1 for e in events if e.kind == "tool_ok" and silent_root_cause(e.text, e.command)),
             "signatures": len(sigs), "signatures_repeated_3plus": sum(1 for v in sigs.values() if v >= 3),
             "scars": len(sc), "root_cause_scars": sum(1 for x in sc if x.error_class in ROOT_CAUSE_CLASSES),
             "guard_rules": len(guards), "demoted_by_self_validation": sum(1 for x in sc if getattr(x, "demoted", False)),
@@ -182,15 +182,16 @@ def report(events, n_sessions):
     st = stats(events, n_sessions)
     sc = scan(events)
     pct = lambda a, b: (f"{100 * a / b:.1f}%" if 100 * a / b >= 1 else f"{100 * a / b:.2f}%") if b else "-"
+    esc = lambda t: t.replace("|", "\\|")
     L = ["# What your agent keeps getting wrong", "",
          f"{st['sessions']:,} sessions · {st['tool_calls']:,} tool calls · {st['failures']:,} failed · "
          f"{st['silent_failures']:,} silent failures (exit 0, but the shell printed an error)", "",
-         "| scar | failures | sessions | status | Worked before |", "|---|---|---|---|---|"]
+         "| scar | failures | corrections | sessions | status | Worked before |", "|---|---|---|---|---|---|"]
     for x in [x for x in sc if x.error_class != "blocked"][:15]:
         fix = next((f for f in (fix_excerpt(x, r.command, 70) for r in reversed(x.recoveries)) if f), "")
         status = "GUARD" if x.actionable else ("demoted" if getattr(x, "demoted", False) else "advice")
-        L.append(f"| `{x.signature}` | {len(x.failures) + len(x.corrections)} | {len(x.sessions)} | {status} | "
-                 + (f"`{fix.replace('|', '¦')}`" if fix else "") + " |")
+        L.append(f"| `{esc(x.signature)}` | {len(x.failures)} | {len(x.corrections)} | {len(x.sessions)} | {status} | "
+                 + (f"`{esc(fix)}`" if fix else "") + " |")
     L += ["", f"**The guard rules** would match {st['bash_failures_matched_by_rules']:,} of {st['bash_failures']:,} failed shell commands "
           f"({pct(st['bash_failures_matched_by_rules'], st['bash_failures'])}) and block {st['bash_successes_blocked']} of "
           f"{st['bash_successes']:,} successful ones ({pct(st['bash_successes_blocked'], st['bash_successes'])})."]
