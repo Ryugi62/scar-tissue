@@ -13,7 +13,7 @@ def load(src):
 
 def main(argv=None):
     a = argparse.ArgumentParser(prog="scar"); sub = a.add_subparsers(dest="cmd", required=True)
-    for name in ("scan", "heal", "stats"):
+    for name in ("scan", "heal", "stats", "holdout", "brief"):
         p = sub.add_parser(name); p.add_argument("logs")
         if name == "heal":
             p.add_argument("--out", default="."); p.add_argument("--llm", choices=["openai"], default=None)
@@ -22,15 +22,27 @@ def main(argv=None):
     if o.cmd == "install":
         guard = os.path.abspath(os.path.join(os.path.dirname(__file__), "guard.py"))
         entry = {"matcher": "Bash", "hooks": [{"type": "command", "command": f"python3 {guard}"}]}
+        brief = {"hooks": [{"type": "command", "command": f"cd {os.path.dirname(os.path.dirname(guard))} && python3 -m scar_tissue brief '~/.claude/projects/*/*.jsonl'"}]}
         if not o.yes:
             print("would add PreToolUse hook to", o.settings, json.dumps(entry)); return 0
         s = json.load(open(o.settings)) if os.path.exists(o.settings) else {}
         pre = s.setdefault("hooks", {}).setdefault("PreToolUse", [])
         if not any(guard in json.dumps(x) for x in pre):
             pre.append(entry)
+        ss = s["hooks"].setdefault("SessionStart", [])
+        if not any("scar_tissue brief" in json.dumps(x) for x in ss):
+            ss.append(brief)
         os.makedirs(os.path.dirname(o.settings) or ".", exist_ok=True); json.dump(s, open(o.settings, "w"), indent=2)
         print("installed guard in", o.settings); return 0
     events, n = load(o.logs)
+    if o.cmd == "brief":   # advice scars as session-start context (SessionStart hook stdout → agent context)
+        scars = [s for s in application.scan(events) if not s.actionable and s.error_class != "blocked"][:10]
+        print("Lessons from this machine's past sessions (Scar Tissue) — repeated failures to avoid:")
+        for s in scars:
+            print(f"- `{s.head}` ({s.error_class}): {len(s.failures)} failures / {len(s.corrections)} corrections across {len(s.sessions)} sessions")
+        return 0
+    if o.cmd == "holdout":
+        print(json.dumps(application.holdout(events), indent=1)); return 0
     if o.cmd == "stats":
         print(json.dumps(application.stats(events, n), indent=1)); return 0
     scars = application.scan(events)

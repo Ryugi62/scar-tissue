@@ -1,11 +1,12 @@
 {
  "sessions": 85,
- "tool_calls": 29163,
+ "tool_calls": 29172,
  "failures": 1810,
  "corrections": 38,
  "signatures": 295,
  "signatures_repeated_3plus": 87,
  "scars": 91,
- "guard_rules": 10,
+ "guard_rules": 1,
+ "demoted_by_self_validation": 2,
  "already_guarded": 29
 }

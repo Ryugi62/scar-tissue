@@ -58,7 +58,7 @@ class DemoScan(unittest.TestCase):
     def test_heal_and_guard(self):
         d = tempfile.mkdtemp()
         rules = application.heal(self.scars, d)
-        self.assertEqual(len(rules), 3)
+        self.assertEqual(len(rules), 2)          # curl -s:exit stays advice — a non-zero exit is an outcome, not a habit
         self.assertEqual(len(os.listdir(os.path.join(d, "scars"))), 3)
         guard = os.path.join(ROOT, "scar_tissue", "guard.py")
         hook = {"tool_name": "Bash", "tool_input": {"command": "until ! pgrep -f server; do sleep 1; done"}, "cwd": d}
@@ -67,6 +67,19 @@ class DemoScan(unittest.TestCase):
         hook["tool_input"]["command"] = "ls -la"
         r = subprocess.run([sys.executable, guard], input=json.dumps(hook), capture_output=True, text=True)
         self.assertEqual(r.returncode, 0); self.assertEqual(r.stderr, "")
+        # escape hatch: proceed once with a stated reason, and the override is logged
+        hook["tool_input"]["command"] = "pgrep -f '[b]uild.py' # scar-ok: bracket pattern cannot match itself"
+        r = subprocess.run([sys.executable, guard], input=json.dumps(hook), capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0)
+        self.assertTrue(os.path.exists(os.path.join(d, ".scar", "overrides.jsonl")))
+
+    def test_self_validation_demotes_rules_that_block_normal_work(self):
+        from scar_tissue.domain import validate_against_history
+        ev = list(self.ev) + [Event("t", "s9", "tool_ok", "Bash", f"pgrep -f worker{i}", "ok") for i in range(10)]
+        scars = detect(ev)
+        validate_against_history(scars, ev)
+        pg = [s for s in scars if s.head == "pgrep -f"][0]
+        self.assertTrue(pg.demoted); self.assertFalse(pg.actionable)
 
 
 if __name__ == "__main__":

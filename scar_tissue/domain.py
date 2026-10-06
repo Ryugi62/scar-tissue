@@ -56,6 +56,10 @@ class Scar:
         or the head is a generic interpreter/reader with no shared flag (would block normal work)."""
         if self.error_class == "blocked" or self.tool not in ("Bash",):
             return False
+        if self.error_class in ("exit", "error", "not-found") and not self.corrections:
+            return False   # a non-zero exit is an outcome, not a habit — needs a timeout/permission/rejection or a human correction
+        if getattr(self, "demoted", False):
+            return False
         first = self.head.split()[0] if self.head else ""
         if not re.match(r"^[a-z][\w.+-]*$", first):          # parse leftovers like "-k" or "d in" are not commands
             return False
@@ -151,6 +155,27 @@ def detect(events: list[Event]) -> list[Scar]:
         if (len(s.failures) >= FAIL_THRESHOLD and len(sess) >= MIN_SESSIONS) or len(s.corrections) >= CORRECTION_THRESHOLD:
             scars.append(s)
     return sorted(scars, key=lambda s: -(len(s.failures) + 2 * len(s.corrections)))
+
+
+def validate_against_history(scars, events, max_rate=0.005, max_count=3):
+    """Self-validation: replay every candidate rule against the agent's own SUCCESSFUL calls.
+    A rule that would have blocked normal work more than max_count times (or > max_rate of successful calls) is demoted to advice."""
+    ok = {}
+    for e in events:
+        if e.kind == "tool_ok" and e.command:
+            ok.setdefault(e.tool, []).append(e.command)
+    report = []
+    for s in scars:
+        if not s.actionable:
+            continue
+        rule = compile_rule(s, "")
+        hits = sum(1 for c in ok.get(s.tool, []) if rule_matches(rule, s.tool, {"command": c}))
+        n = max(1, len(ok.get(s.tool, [])))
+        s.false_blocks = hits
+        if hits > max_count or hits / n > max_rate:
+            s.demoted = True
+        report.append((s.signature, hits, n, getattr(s, "demoted", False)))
+    return report
 
 
 def compile_rule(scar: Scar, principle: str) -> dict:

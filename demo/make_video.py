@@ -85,9 +85,9 @@ def main():
         (slide_term("normal work still passes", "echo '{git push origin feature-x}' | python3 scar_tissue/guard.py", guard_ok + "\n(only `git push --force` was scarred — plain push stays allowed)"),
          "Precision matters more than coverage. A plain git push still passes. Only the force push the human rejected is blocked."),
         (slide_term("4 · my own machine (aggregate counts only)", "scar stats '~/.claude/projects/*/*.jsonl'", stats),
-         "On my own machine: eighty-five sessions, twenty-nine thousand tool calls, eighteen hundred failures, ninety scars. Twenty-nine were already guarded by hooks I wrote by hand. Only nine are precise enough to block automatically. The rest become advice."),
+         "On my own machine: eighty-five sessions, twenty-nine thousand tool calls, eighteen hundred failures, ninety-one scars. Every candidate rule is replayed against the agent's own successful history. Before that filter, rules would have blocked almost five percent of normal work. After it, two in twenty thousand. The rest are shown as advice at session start."),
         (slide_term("tests", "python3 -m unittest discover -s tests", tests),
-         "Stdlib only, tested. Next: an unblock-once escape hatch, scars that expire, and adapters for other agents."),
+         "If the agent is sure, it can override once with a stated reason, and the override is logged. Stdlib only, nine tests. Next: root-cause-aware principles, scars that expire, and adapters for other agents."),
     ]
     clips = []
     for i, (img, vo) in enumerate(scenes):

@@ -16,11 +16,19 @@ def main():
         return 0
     tool, inp = hook.get("tool_name", ""), hook.get("tool_input") or {}
     text = inp.get("command") or inp.get("url") or inp.get("file_path") or ""
+    m = re.search(r"#\s*scar-ok:\s*(\S.{4,})$", text.strip())
+    if m:   # escape hatch: the agent may proceed once if it states a reason; every override is logged for review
+        try:
+            with open(os.path.join(os.path.dirname(path), "overrides.jsonl"), "a") as f:
+                f.write(json.dumps({"tool": tool, "command": text[:300], "reason": m.group(1)[:200]}) + "\n")
+        except OSError:
+            pass
+        return 0
     for r in rules:
         if r.get("tool") == tool and re.search(r["pattern"], text):
             ev = r.get("evidence", {})
             sys.stderr.write(f"[scar-tissue] blocked by scar `{r['id']}` ({ev.get('failures', 0)} failures, "
-                             f"{ev.get('corrections', 0)} corrections, {ev.get('sessions', 0)} sessions): {r['message']}\n")
+                             f"{ev.get('corrections', 0)} corrections, {ev.get('sessions', 0)} sessions): {r['message']} (If you are sure this case is different, append `# scar-ok: <reason>` to the command.)\n")
             return 2
     return 0
 
