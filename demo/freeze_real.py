@@ -19,11 +19,17 @@ for e in events:
         d = e.ts[:10]; b = d[:8] + ("01-09" if d[8:] < "10" else "10-19" if d[8:] < "20" else "20-31")
         tot[b] += 1
         z[b] += domain.signature(e)[2] in ("zsh-equals", "zsh-nomatch")
-st["zsh_trend_per_1000_bash_calls"] = [{"days": b, "bash_calls": tot[b], "zsh_failures": z[b], "per_1000": round(1000 * z[b] / tot[b], 1)}
-                                       for b in sorted(tot) if tot[b] >= 1000]
+days = {}
+for e in events:
+    if e.tool == "Bash" and e.ts and e.kind in ("tool_ok", "tool_error"):
+        d = e.ts[:10]; b = d[:8] + ("01-09" if d[8:] < "10" else "10-19" if d[8:] < "20" else "20-31")
+        lo, hi = days.get(b, (d, d)); days[b] = (min(lo, d), max(hi, d))
+st["zsh_trend_per_1000_bash_calls"] = [{"from": days[b][0], "to": days[b][1], "bash_calls": tot[b], "zsh_failures": z[b],
+                                        "per_1000": round(1000 * z[b] / tot[b], 1)} for b in sorted(tot) if tot[b] >= 1000]
 json.dump(st, open(os.path.join(OUT, "stats-real.json"), "w"), indent=1)
 open(os.path.join(OUT, "stats-real.txt"), "w").write(application.stats_table(st))
 ho = application.holdout(events)
+ho["sessions_total"] = n
 ho["_meta"] = {"command": "scar holdout '~/.claude/projects/**/*.jsonl'", "run": now,
                "method": "learn from the earliest 70% of sessions (by first timestamp), replay the later 30%; Bash calls only"}
 json.dump(ho, open(os.path.join(OUT, "holdout-real.json"), "w"), indent=1)

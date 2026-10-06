@@ -126,7 +126,8 @@ def holdout(events, train_frac=0.7):
     rules = [compile_rule(s, "") for s in scan(train) if s.actionable]
     fails, oks = _bash_outcomes(test)
     hit = lambda e: any(rule_matches(r, e.tool, {"command": e.command}) for r in rules)
-    return {"train_sessions": len(train_s), "test_sessions": len(test_s), "guard_rules": len(rules),
+    return {"sessions_with_timestamped_events": len(order), "train_sessions": len(train_s), "test_sessions": len(test_s),
+            "guard_rules": len(rules),
             "rule_ids": [r["id"] for r in rules],
             "test_failures": len(fails), "test_failures_blocked": sum(1 for e in fails if hit(e)),
             "test_successes": len(oks), "test_successes_blocked": sum(1 for e in oks if hit(e))}
@@ -154,6 +155,7 @@ def stats(events, n_sessions):
     rules = [compile_rule(g, "") for g in guards]
     hit = lambda e: any(rule_matches(r, e.tool, {"command": e.command}) for r in rules)
     matched = [e for e in fails if hit(e)]
+    overlap = sum(1 for e in matched if sum(rule_matches(r, e.tool, {"command": e.command}) for r in rules) > 1)
     return {"sessions": n_sessions, "tool_calls": kinds["tool_ok"] + kinds["tool_error"] + kinds["hook_block"],
             "failures": kinds["tool_error"] + kinds["hook_block"], "corrections": kinds["user_correction"],
             "silent_failures": sum(1 for e in events if e.kind == "tool_ok" and silent_root_cause(e.text)),
@@ -163,7 +165,7 @@ def stats(events, n_sessions):
             "already_guarded": sum(1 for x in sc if x.error_class == "blocked"),
             "recoveries_learned": sum(len(x.recoveries) for x in guards),
             "bash_failures": len(fails), "bash_failures_exit_nonzero": sum(1 for e in fails if e.kind == "tool_error"),
-            "bash_failures_matched_by_rules": len(matched),
+            "bash_failures_matched_by_rules": len(matched), "bash_failures_matched_by_2plus_rules": overlap,
             "bash_failures_matched_exit_nonzero": sum(1 for e in matched if e.kind == "tool_error"),
             "bash_successes": len(oks), "bash_successes_blocked": sum(1 for e in oks if hit(e)),
             "rules": per_rule, "failure_cost": failure_cost(events, rules),

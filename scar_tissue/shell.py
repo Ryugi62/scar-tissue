@@ -28,8 +28,9 @@ class Command:
         return any(ch in "*?" and m for ch, m in zip(self.words[i], self.masks[i]))
 
     def unquoted_equals_word(self, i: int) -> bool:
+        """`==`, `===`… unquoted: zsh looks up a command named `=`, `==` and fails (`=ls` alone is valid zsh)."""
         w = self.words[i]
-        return len(w) >= 2 and w[0] == "=" and self.masks[i][0] and w[1] != "("
+        return len(w) >= 2 and w[:2] == "==" and self.masks[i][0] and self.masks[i][1]
 
 
 def _balanced(s: str, i: int, open_ch: str, close_ch: str) -> int:
@@ -124,7 +125,7 @@ def _tokens(s: str, subs: list):
             body = s[i + 1:j - 1]
             for m in re.finditer(r"\$\(", body):          # command substitutions inside double quotes still run
                 if not body.startswith("$((", m.start()):
-                    e = _balanced(body, m.end(), "(", ")"); subs.append(body[m.end():e - 1])
+                    e = _balanced(body, m.end(), "(", ")"); subs.append((i, body[m.end():e - 1]))
             val.extend(body); mask.extend([False] * len(body)); i = j; continue
         if c == "$" and s.startswith("$((", i):
             if start is None: start = i
@@ -133,7 +134,7 @@ def _tokens(s: str, subs: list):
         if c == "$" and s.startswith("$(", i):
             if start is None: start = i
             e = _balanced(s, i + 2, "(", ")")
-            subs.append(s[i + 2:e - 1]); val.append("S"); mask.append(False); i = e; continue
+            subs.append((i, s[i + 2:e - 1])); val.append("S"); mask.append(False); i = e; continue
         if c == "$" and s.startswith("${", i):
             if start is None: start = i
             e = _balanced(s, i + 2, "{", "}")
@@ -143,7 +144,7 @@ def _tokens(s: str, subs: list):
             j = i + 1
             while j < n and s[j] != "`":
                 j += 2 if s[j] == "\\" else 1
-            subs.append(s[i + 1:j]); val.append("S"); mask.append(False); i = j + 1; continue
+            subs.append((i, s[i + 1:j])); val.append("S"); mask.append(False); i = j + 1; continue
         if c == "(" and s.startswith("((", i) and start is None:   # (( arithmetic ))
             e = s.find("))", i + 2); e = n if e < 0 else e + 2
             yield ("arith", i, e); i = e; continue
@@ -168,12 +169,14 @@ def _tokens(s: str, subs: list):
 
 
 @lru_cache(maxsize=131072)
-def parse(cmd: str, shell: str = "zsh", depth: int = 0) -> tuple:
-    """All simple commands in `cmd` (including those inside $(…), `…` and `bash -c '…'` payloads), in source order."""
+def parse(cmd: str, shell: str = "zsh", depth: int = 0, outer_loop: str | None = None) -> tuple:
+    """All simple commands in `cmd` (including those inside $(…), `…`, `bash -c '…'`, `eval '…'` and `find -exec …`),
+    in source order. A command substitution inherits the loop it sits in (`while [ -n "$(pgrep -f x)" ]`)."""
     s = (cmd or "")[:MAX_LEN]
     subs: list = []
+    sub_loop: dict = {}               # substitution start → enclosing loop
     out: list = []
-    loops: list = []
+    loops: list = [outer_loop] if outer_loop else []
     words, masks, first, last = [], [], None, None
     in_for_header = in_test = skip_next = False
 
@@ -201,6 +204,9 @@ def parse(cmd: str, shell: str = "zsh", depth: int = 0) -> tuple:
                 end_command()
             continue
         _, value, mask, a, b = tok
+        for k, _body in subs:
+            if a <= k < b and k not in sub_loop:
+                sub_loop[k] = loops[-1] if loops else None
         if skip_next:                                   # redirection target
             skip_next = False
             continue
@@ -227,13 +233,23 @@ def parse(cmd: str, shell: str = "zsh", depth: int = 0) -> tuple:
 
     if depth < MAX_DEPTH:
         extra = []
-        for c in out:                                    # bash -c '…' / sh -c / zsh -c payloads
+        for c in out:
             w = c.words
-            if w and w[0].rsplit("/", 1)[-1] in ("bash", "sh", "zsh"):
+            name = w[0].rsplit("/", 1)[-1] if w else ""
+            if name in ("bash", "sh", "zsh"):            # bash -c '…' / sh -c / zsh -c payloads
                 for k in range(1, len(w) - 1):
                     if re.match(r"^-[a-z]*c[a-z]*$", w[k]):
-                        extra.extend(parse(w[k + 1], "zsh" if w[0].endswith("zsh") else "bash", depth + 1)); break
-        for body in subs:
-            extra.extend(parse(body, shell, depth + 1))
+                        extra.extend(parse(w[k + 1], "zsh" if name == "zsh" else "bash", depth + 1, c.loop)); break
+            elif name == "eval" and len(w) > 1:          # eval '…' runs in the same shell
+                extra.extend(parse(" ".join(w[1:]), shell, depth + 1, c.loop))
+            elif name == "find":                         # find … -exec cmd … \; runs cmd (no shell in between)
+                for k, x in enumerate(w):
+                    if x in ("-exec", "-execdir", "-ok", "-okdir"):
+                        end = next((j for j in range(k + 1, len(w)) if w[j] in (";", "+")), len(w))
+                        if end > k + 1:
+                            extra.append(Command(tuple(w[k + 1:end]), tuple(c.masks[k + 1:end]), c.loop, "exec",
+                                                 " ".join(w[k + 1:end])))
+        for k, body in subs:
+            extra.extend(parse(body, shell, depth + 1, sub_loop.get(k)))
         out.extend(extra)
     return tuple(out)

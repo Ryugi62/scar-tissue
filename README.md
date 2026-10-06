@@ -2,47 +2,64 @@
 
 **Your AI coding agent's repeated mistakes become guardrails — learned from its own logs.**
 
-Coding agents (Claude Code, Codex, Cursor) start every session fresh, so they repeat the same mistakes. Scar Tissue reads the agent's session logs, finds failures that repeat across sessions, and compiles each one into a Claude Code `PreToolUse` hook that blocks the habit *and tells the agent what worked last time*.
+Coding agents (Claude Code, Codex, Cursor) start every session fresh, so they repeat the same mistakes, and some of those mistakes look like success. Scar Tissue is two Claude Code hooks and a log scanner:
 
-On my laptop (1,444 Claude Code sessions, 151,783 tool calls), **3 learned rules match 45.6% of my agent's failed shell commands** (2,801 of 6,144) and would block **16 of 94,109 successful ones**. Learned only from my earlier sessions, they would have blocked **41.8% (1,499 of 3,586) of the later sessions' failures**, with 9 wrong blocks in 56,201 calls.
+1. **A silent-failure alarm (day one, no history needed).** When a shell command exits 0 but the shell printed an error mid-way — zsh aborted a `grep`, a tool wasn't installed — the agent is told right away that part of the command did not run, instead of reading the empty output as "nothing found".
+2. **Learned guards.** `scar` reads the agent's session logs, finds failures that repeat across sessions, and compiles each into a `PreToolUse` rule that blocks the habit *and shows the fix that worked last time*.
+
+On my laptop (1,458 Claude Code sessions, 152,289 tool calls): **2,366 shell calls exited 0 while the shell had printed an error** — for the two most common causes, the agent never re-ran 373 of them. **2 learned rules match 45.4% of the agent's failed shell commands** (2,812 of 6,188) and would block 14 of 94,445 successful ones. Learned only from my earlier sessions, they would have blocked **41.7% of the later sessions' failures** (1,509 of 3,623), with 9 wrong blocks in 56,357 calls.
 
 ```bash
 pipx install git+https://github.com/Ryugi62/scar-tissue    # or: pip install git+https://github.com/Ryugi62/scar-tissue
-scar demo                                   # 2 seconds: bundled logs → scars → the real guard script, no network, changes nothing
+scar demo                                   # 2 seconds: bundled synthetic logs → scars → the real guard script; no network, changes nothing
 scar report '~/.claude/projects/**/*.jsonl' # read-only: what your agent keeps getting wrong, and the fixes that worked
 ```
 
+## Day one: the silent-failure alarm
+Claude Code shows the agent `exit 0` plus whatever was printed. If zsh aborted part of a pipeline (`grep -rn TODO . --include=*.md | head` → `(eval):1: no matches found: --include=*.md`), the call still "succeeds". `scar install` adds the same `guard.py` as a `PostToolUse` hook: if a Bash result contains a line printed by the shell itself (`(eval):N:`, `zsh:N:`, `bash: line N:`), it answers with exit 2 and an explanation, and Claude Code hands that to the agent before its next step.
+
+**Does it change the outcome?** `demo/ab/alarm_ab.py` runs the same prompt in fresh `claude -p` sessions with and without the alarm (5 runs each, results in `demo/ab/alarm-ab.jsonl`). The prompt asks for a command whose `grep` fails silently in zsh:
+
+| prompt | without the alarm | with the alarm |
+|---|---|---|
+| the error is the only output | 5/5 correct answers | 5/5 correct answers |
+| the error is buried in other output (`cat …; grep …; ls`) | **0/5** — every run noticed the grep "never ran" and stopped without a count | **5/5** — fixed the glob, re-ran, reported the 2 TODOs |
+
+When the failure is obvious, today's model copes on its own. When it is buried in other output, it notices but stops; the alarm turns that into a fix and an answer. An unedited run with the alarm, from a fresh project with no history (`demo/recordings/live-silent-alarm.txt`):
+
 ```
-3) guard (the real PreToolUse hook script) on the agent's next calls:
-   BLOCKED  until ! pgrep -f build.py; do sleep 5; done   # the habit that timed out 4×
-            ↳ `pgrep -f` ran until the tool timeout 4× across 3 sessions — bound the wait … Worked before: `for i in $(seq 1 60); do pgrep -f '[b]uild.py' …`
-   allowed  for i in $(seq 1 60); do pgrep -f '[b]uild.py' >/dev/null || break; sleep 5; done   # the agent's own fix, learned from the logs
-   BLOCKED  echo === Tests passed ===   # zsh expands `===`
-   allowed  echo "=== Tests passed ==="   # quoted
-   BLOCKED  timeout 120 pytest -q   # no GNU timeout on this machine
-   BLOCKED  git push --force origin main   # the human said no, twice
-   allowed  git push origin feature-x   # normal work
+── agent → Bash ──
+$ grep -rn TODO . --include=*.md | head
+── result (exit 0) ──
+(eval):1: no matches found: --include=*.md
+── PostToolUse hook → agent (exit 2) ──
+[scar-tissue] This command exited 0, but the shell printed `(eval):1: no matches found: --include=*.md` — that part did not run
+(zsh aborted the command because an unquoted glob matched nothing). Do not read the empty or partial output as a result; fix it and run it again.
+── agent → Bash ──
+$ grep -rn TODO . --include='*.md' | head
+── result (exit 0) ──
+docs/faq.md:2:TODO: add retry section
+docs/setup.md:2:TODO: document proxies
 ```
 
-## What it found on my laptop
+In my own history the alarm would have fired on those 2,366 calls. For the most common one (an aborted `--include` search), the agent never re-ran the search 356 times out of 1,238 (`failure_cost` in `demo/recordings/stats-real.json`).
+
+## Learned guards: what it found on my laptop
 One frozen run over every Claude Code transcript on my machine (`demo/recordings/stats-real.json` / `.txt` — aggregate counts and signatures only; subagent transcripts are folded into their parent session):
 
 | rule learned from my logs | failures it matches | of which exit ≠ 0 | sessions | successful calls it would block |
 |---|---|---|---|---|
-| unquoted `=` word in zsh (`echo ===`, `[ a == b ]`) | 1,592 | 1,521 | 319 | 3 |
-| unquoted `--include=*…` glob in zsh | 1,224 | 35 | 442 | 11 |
-| `pdffonts` is not installed | 5 | 0 | 2 | 2 |
+| unquoted `==` word in zsh (`echo === Done ===`, `[ "$a" == b ]`) | 1,594 | 1,523 | 319 | 3 |
+| unquoted `--include=*…` glob in zsh | 1,238 | 35 | 456 | 11 |
 
-The agent kept writing bash in a zsh shell. `echo === Done ===` or `[ "$a" == b ]` fails in zsh (an unquoted word starting with `=` is expanded as a command path), and an unquoted `--include=*.md` makes zsh abort the command with "no matches found". Each session starts fresh, so it never learned.
+(20 failed commands trip both rules; they are counted once in the 2,812.) The agent kept writing bash in a zsh shell, and every session started fresh, so it never learned. A loud failure was cheap: the median cost one extra call (~4 s) before the agent fixed it. The silent ones are the expensive ones (above).
 
-**The silent ones are the dangerous ones.** 1,189 of the 1,224 `--include` failures exited 0: the search was aborted, the pipe printed nothing, and the call "succeeded". In **351 of them the agent never re-ran the search** within the next 6 calls — it moved on believing nothing was found. The loud failures are cheap by comparison: the median one cost 1 extra call (~4 s) before the agent fixed it (`failure_cost` in the same file).
+**Is it still happening?** zsh failures per 1,000 shell calls: 55 (Sep 4–9) → 40 (Sep 10–19) → 37 (Sep 20–30) → 31 (Oct 1–6). The rate is falling, but it still happened 887 times in the first six days of October. In 4 short fresh sessions with today's model the agent made none (pilot in `demo/ab/`) — the habit lives in long, busy sessions.
 
-**Is it still happening?** zsh failures per 1,000 shell calls: 55 (Sep 1–9) → 40 (Sep 10–19) → 37 (Sep 20–30) → 30 (Oct 1–6). The rate is falling, but it still happened 857 times in the first six days of October. In 4 short, fresh sessions with today's model the agent made none (pilot in `demo/ab/`) — the habit lives in long, busy sessions.
+**Couldn't I just change a shell option?** Yes — `setopt NO_NOMATCH` and `unsetopt EQUALS` remove these two, and `scar report` prints exactly those lines. I didn't know I needed them until the logs said so. That is the job: find the few things worth fixing in 150,000 tool calls, then fix each at the right layer — the environment, a guard, or advice at session start. The guard is for what an option can't fix (a missing binary, a wait loop that hangs, a push a human said no to) and for machines where you don't want to change your own shell.
 
-**Couldn't I just change a shell option?** Yes — `setopt NO_NOMATCH` and `unsetopt EQUALS` would remove the two big ones, and `scar report` prints exactly those lines. I didn't know I needed them until the logs said so. The guard is for what an option can't fix (a missing binary, a wait loop that hangs, a push the human said no to) and for machines where you don't want to change your own shell.
-
-## Live: a Claude Code session meets a scar (prompted)
-`demo/recordings/live-claude-code-block.txt` — a real `claude -p` run against the current guard, rendered from its stream-json events. The prompt **asks** for the scarred command (the rule comes from the bundled demo logs), to show what happens at the block:
+## Live: a blocked habit (prompted, from the synthetic demo logs)
+`demo/recordings/live-claude-code-block.txt` — a real `claude -p` run. The prompt **asks** for the scarred command, and the scar comes from the bundled synthetic logs; it shows what happens at the block, not how often it happens:
 
 ```
 ── agent → Bash ──
@@ -60,7 +77,7 @@ $ ls -la build/ 2>&1; echo ---; cat build/out.txt
 ── result ──
 build ok: 42 files compiled
 ```
-The agent took the fix from the block message, the guard let it through, and the task finished (4 turns, 23 s). In its answer it explained the root cause on its own — `pgrep -f build.py` matches the shell running the loop.
+The agent took the fix from the block message, the guard let it through, and the task finished (4 turns, 23 s).
 
 ## Use it on your own agent
 ```bash
@@ -68,41 +85,42 @@ cd your-project
 scar report '~/.claude/projects/**/*.jsonl'         # read-only markdown report
 scar heal   '~/.claude/projects/**/*.jsonl' --out . # scars/*.md (review + commit), .scar/rules.json, .scar/brief.md
 scar install                                        # dry run: prints the hook entries
-scar install --yes                                  # guard (PreToolUse) + brief (SessionStart: cat .scar/brief.md) in .claude/settings.json
+scar install --yes                                  # guard (PreToolUse) + alarm (PostToolUse) + brief (SessionStart) in .claude/settings.json
 scar stats '<logs>' --table · scar holdout '<logs>' # aggregate numbers only
 ```
-Other agents can feed it: `--format events` takes a generic JSONL of `{ts, session, kind, tool, command, text}`, and `--format swe-agent` reads SWE-agent trajectories. Enforcement is Claude Code hooks for now.
+Other agents can feed the scanner: `--format events` takes a generic JSONL of `{ts, session, kind, tool, command, text}`, and `--format swe-agent` reads SWE-agent trajectories. Enforcement is Claude Code hooks for now.
 
 ## How it decides
 - **Root cause first.** If the error text names the cause, that is the signature, whatever the command was: `command not found: timeout` → `timeout:missing-command`; `(eval):1: == not found` → `=word:zsh-equals`; `no matches found: --include=*.md` → `--include=*:zsh-nomatch`. Otherwise: tool + command head + error class (timeout, permission, rejected, corrected…).
-- **Silent failures count.** A call that exits 0 but printed a shell error (`grep … --include=*.md | head`) is a failure, not normal work.
-- **Rules are matched by a shell tokenizer, not regexes** (`scar_tissue/shell.py`, linear time). It knows which simple commands run, which characters were quoted or escaped, heredocs and comments, `[[ ]]`/`(( ))`, the loop each command sits in, `$(…)`/backticks, and that a `bash -c '…'` payload is bash, not zsh. Head rules see through `FOO=1`, `nice`, `xargs`, `command`, `timeout`, git global options (`git -C x push`) and flag aliases/clusters (`-f` = `--force`, `-fu`).
+- **Silent failures count.** A call that exits 0 but printed a shell error is a failure, not normal work.
+- **Rules are matched by a shell tokenizer, not regexes** (`scar_tissue/shell.py`, linear time). It knows which simple commands run, which characters were quoted or escaped, heredocs and comments, `[[ ]]`/`(( ))`, the loop each command sits in (also inside `$(…)`), backticks, that a `bash -c '…'` payload is bash and not zsh, `eval '…'`, `find -exec`, wrappers with their own options (`env -i`, `nice -n`, `xargs -I`, `parallel`, `noglob`), git global options (`git -C x`, `--git-dir x`) and flag spellings (`-f` = `--force`, `-fu`, `+main`).
 - **Rules come from evidence, not from the model.** A habit learned inside wait loops is only blocked inside an unbounded `while`/`until` loop (a one-shot `pgrep -f server` passes). Head rules require the flags every example shared (`git push` passes, `git push --force` does not). An optional LLM (`--llm openai`) only rephrases the advice for head habits.
-- **The guard never blocks the agent's own fix.** After a failure, the next successful call doing the same job is recorded as a *recovery*; its distinguishing shape becomes an exemption, and the one simple command that carries the fix is shown as "Worked before". A rule that would still block a recorded recovery is demoted.
-- **A human "no" counts only if it talks about the call.** A correction ("stop force pushing") is pinned on the last call only if it shares a word with it; "no worries" or a "no" about something else is ignored.
-- **Precision over coverage.** Every candidate is replayed against the agent's own successful history and demoted to advice if it would block normal work more than 3 times *and* more than once per 20 mistakes it stops, or more than 0.5% of all successful calls. "Any unquoted glob" stopped 873 failures but would have blocked 8,358 successful calls — demoted. `timeout` is missing in my main shell but ran fine 117 times in other sessions — demoted. Those stay advice, injected at session start from `.scar/brief.md`.
-- **The thresholds do not drive the result.** They were set on this data, but the holdout gives the same result with the benefit ratio at 10, 20 or 50 (`demo/recordings/sensitivity-real.json`); only a ratio of 1 lets weak rules through (4 rules, 94 wrong blocks instead of 9).
+- **The guard never blocks the agent's own fix.** After a failure, the next successful call doing the same job is recorded as a *recovery*; its distinguishing shape becomes an exemption, and the part that carries the fix is shown as "Worked before". A rule that would still block a recorded recovery is demoted.
+- **A human "no" counts only if it talks about the call** ("stop force pushing" after `git push --force`), and the agent cannot override a scar a human created — only the human can.
+- **Precision over coverage.** Every candidate is replayed against the agent's own successful history and demoted to advice if it would block one successful call per fewer than 20 mistakes it stops, or more than 0.5% of all successful calls. "Any unquoted glob" stopped 875 failures but would have blocked 8,407 successful calls — demoted. `timeout` is missing in my main shell but ran fine 117 times in other sessions — demoted. Those stay advice, injected at session start from `.scar/brief.md`.
+- **The thresholds don't drive the result.** They were set on this data, but the holdout gives the same 2 rules and the same numbers with the ratio at 10, 20 or 50 (`demo/recordings/sensitivity-real.json`); only a ratio of 1 lets weak rules through.
 - **Escape hatch with a budget.** If the agent is sure, it appends `# scar-ok: <reason>`; the guard lets it through and logs it to `.scar/overrides.jsonl` — at most 3 times per scar, then a human has to look.
 
-## Not just my machine?
-On 2,000 public SWE-agent trajectories ([nebius/SWE-agent-trajectories](https://huggingface.co/datasets/nebius/SWE-agent-trajectories), CC-BY-4.0; `demo/recordings/swe-agent-public.json`), another agent with another model and shell repeats itself too: 321 failure signatures repeated ≥3 times — e.g. `cd..` without a space 987 times in 25 runs. But Scar Tissue's rules there match only 524 of 23,520 failures (2.2%): most of that agent's failures are outcomes (an `edit` that introduced a syntax error, 6,772× in 968 runs), which no pre-execution hook can stop, and its blockable habits are tied to one repository's container. The adapter reads them; the guard is built for a developer's own machine.
+## Someone else's logs, another agent
+- **Another person's Claude Code logs.** [crispwisp/wisp-claude-code-sessions](https://huggingface.co/datasets/crispwisp/wisp-claude-code-sessions) (MIT; 103 sessions, 2,207 tool calls on an Arch Linux machine, bash). Scar Tissue, unchanged, found 1 repeated failure (advice), proposed **no blocks**, and the alarm would have fired on 3 calls. It does not invent guardrails where there is no repeated habit.
+- **Another agent.** On 2,000 public SWE-agent trajectories ([nebius/SWE-agent-trajectories](https://huggingface.co/datasets/nebius/SWE-agent-trajectories), CC-BY-4.0; `demo/recordings/swe-agent-public.json`), 321 failure signatures repeat ≥3 times — e.g. `cd..` without a space 987 times in 25 runs. But rules there match only 2.2% of failures: most of that agent's failures are outcomes (an `edit` that introduced a syntax error, 6,772× in 968 runs) that no pre-execution hook can stop, and its blockable habits are tied to one repository's container.
 
 ## Limitations
-- One user, one laptop. The holdout is a time split on the same machine, not another person's logs.
-- The live run is prompted; real-world effect is measured by replaying history, not by a controlled live experiment (the 4-run pilot had no zsh mistakes to stop).
-- Enforcement is Claude Code only; the SWE-agent and generic-JSONL adapters scan and report.
-- Human corrections need to share a word with the call they correct, so only 5 were found in my logs; most scars come from errors.
+- One heavy user. The holdout is a time split on my machine; the second person's logs are small and had no repeated habit to learn.
+- The live runs are prompted. The alarm A/B is 5 runs per arm on one task; the learned guards' real-world effect is measured by replaying history, not by a controlled live experiment.
+- On my data the learned guards come down to two zsh habits; the other 163 scars stay advice or were demoted.
+- Enforcement is Claude Code only. The holdout covers the 934 of 1,458 sessions that have timestamped tool calls.
 
 ## Tests
 ```bash
-python3 -m unittest discover -s tests    # 52 tests: tokenizer probes (aliases, wrappers, quoting, heredocs, bash -c, loops), root causes, silent failures, recoveries, fix-safety, cost-benefit demotion, override budget, corrections, adapters, report, `scar demo`
+python3 -m unittest discover -s tests    # 62 tests: tokenizer probes (aliases, wrappers, quoting, heredocs, bash -c, eval, find -exec, loops), root causes, silent failures + the alarm, recoveries, fix-safety, cost-benefit demotion, override budget, human-only override, corrections, adapters, report, `scar demo`
 ```
 Standard library only (Python ≥ 3.9). The guard decides in milliseconds and looks at most at the first 20,000 characters of a command.
 
 ## Built during OFFGRID
-Everything in this repo was written during the hackathon window (Oct 2026; see the commit history). I run a personal agent OS on Claude Code every day and had hand-written dozens of hooks, one incident at a time, after the agent repeated a mistake. While building this, my own agent hit `command not found: timeout` again. The incidents are already in the logs — the guardrails should write themselves. It reads standard Claude Code transcript files and does not include my private setup.
+Everything in this repo was written during the hackathon window (commits from 2026-10-06). I run a personal agent OS on Claude Code every day and had hand-written dozens of hooks, one incident at a time, after the agent repeated a mistake. While building this, my own agent hit `command not found: timeout` again. The incidents are already in the logs — the guardrails should write themselves. It reads standard Claude Code transcript files and does not include my private setup.
 
 ## Next
-Codex and Cursor log adapters with enforcement, team mode (scars reviewed and shared through the repo), and scar decay (rules expire when the failure stops recurring).
+Codex and Cursor adapters with enforcement, team mode (scars reviewed and shared through the repo), and scar decay (rules expire when the failure stops recurring).
 
 MIT License

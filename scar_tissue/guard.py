@@ -5,9 +5,27 @@ same pure function the rules were validated with: scar_tissue.domain.rule_matche
 import json, os, re, sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from scar_tissue.domain import rule_matches  # noqa: E402  (pure, stdlib only)
+from scar_tissue.domain import rule_matches, silent_root_cause, SHELL_ERR  # noqa: E402  (pure, stdlib only)
 
 OVERRIDE_BUDGET = 3
+
+
+CAUSE = {"zsh-nomatch": "zsh aborted the command because an unquoted glob matched nothing",
+         "zsh-equals": "zsh tried to run a command named `=` (an unquoted `==`/`===` word)",
+         "missing-command": "a command in it is not installed here"}
+
+
+def silent_alarm(hook):
+    """PostToolUse: the call 'succeeded' (exit 0) but the shell printed an error — tell the agent before it trusts the output."""
+    resp = hook.get("tool_response") or {}
+    text = "\n".join(str(resp.get(k) or "") for k in ("stdout", "stderr", "output")) if isinstance(resp, dict) else str(resp)
+    rc = silent_root_cause(text)
+    if hook.get("tool_name") != "Bash" or not rc:
+        return 0
+    line = SHELL_ERR.search(text).group(0)[:160]
+    sys.stderr.write(f"[scar-tissue] This command exited 0, but the shell printed `{line}` — that part did not run "
+                     f"({CAUSE.get(rc[0], rc[0])}). Do not read the empty or partial output as a result; fix it and run it again.\n")
+    return 2
 
 
 def main():
@@ -15,6 +33,8 @@ def main():
         hook = json.load(sys.stdin)
     except ValueError:
         return 0
+    if hook.get("hook_event_name") == "PostToolUse":
+        return silent_alarm(hook)
     path = os.environ.get("SCAR_RULES") or os.path.join(hook.get("cwd") or os.getcwd(), ".scar", "rules.json")
     try:
         with open(path) as f:
@@ -28,6 +48,11 @@ def main():
     text = inp.get("command") or ""
     m = re.search(r"#\s*scar-ok:\s*(\S.{4,})$", text.strip())
     log = os.path.join(os.path.dirname(path), "overrides.jsonl")
+    human_no = hit.get("evidence", {}).get("corrections", 0) and not hit.get("evidence", {}).get("failures", 0)
+    if m and human_no:   # a human said no to this — only a human can lift it
+        sys.stderr.write(f"[scar-tissue] blocked by scar `{hit['id']}`: a human said no to this before ({hit['message']}). "
+                         "The agent cannot override it — ask the human.\n")
+        return 2
     if m:   # escape hatch: the agent states a reason; logged per rule, at most OVERRIDE_BUDGET times until a human reviews
         try:
             with open(log) as f:

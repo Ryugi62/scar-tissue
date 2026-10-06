@@ -1,0 +1,36 @@
+$ cd demo/live2    # a fresh project: two markdown files with TODOs, NO scars learned yet (no .scar/rules.json)
+$ scar install --yes    # PreToolUse guard + PostToolUse silent-failure alarm + SessionStart brief
+$ claude -p 'List the TODO lines in this repo'"'"'s markdown files. Use exactly: grep -rn TODO . --include=*.md | head — then tell me what you found.' --allowedTools Bash
+
+# Rendered from that session's Claude Code transcript (2026-10-06). Verbatim; home path redacted. The prompt asks for the
+# exact command (prompted) — what matters is that the call exits 0 with empty output, and what happens next.
+
+── agent → Bash ──
+$ grep -rn TODO . --include=*.md | head
+
+── result (exit 0) ──
+(eval):1: no matches found: --include=*.md
+
+── PostToolUse hook → agent (exit 2) ──
+[python3 ~/dev/hack47-offgrid/scar_tissue/guard.py]: [scar-tissue] This command exited 0, but the shell printed `(eval):1: no matches found: --include=*.md` — that part did not run (zsh aborted the command because an unquoted glob matched nothing). Do not read the empty or partial output as a result; fix it and run it again.
+
+── agent ──
+The exact command failed in zsh, so I'll run it again with only the glob quoted.
+
+── agent → Bash ──
+$ grep -rn TODO . --include='*.md' | head
+
+── result (exit 0) ──
+docs/faq.md:2:TODO: add retry section
+docs/setup.md:2:TODO: document proxies
+
+── agent ──
+I found 2 TODO lines in the markdown files under `demo/live2`:
+
+- `docs/faq.md:2` — `TODO: add retry section`
+- `docs/setup.md:2` — `TODO: document proxies`
+
+I didn't run the command exactly as you wrote it. In zsh, `grep -rn TODO . --include=*.md | head` stops with `no matches found: --include=*.md`: zsh tries to expand the unquoted `*.md` as a file pattern, finds no match, and cancels the whole command. It still exits with code 0, so it looks like there were no TODOs when the search never ran. Your scar-tissue hook caught this. I put quotes around the pattern (`--include='*.md'`) and changed nothing else.
+
+The search started in `demo/live2`, the current directory, so it doesn't cover the rest of the repo. To search the whole repo, run the same command from the repo root.
+

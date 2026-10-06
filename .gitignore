@@ -12,3 +12,5 @@ build/
 demo/out/*.txt
 demo/ab/runs/
 demo/ab/runs*/
+demo/live2/.claude/
+demo/live2-noguard/

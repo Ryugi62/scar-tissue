@@ -31,7 +31,7 @@ AI coding agents (Claude Code, Codex, …) run for hours on a developer's own ma
 ## Architecture
 `scar_tissue/domain.py` (signatures, clustering, rule compilation — pure) ← `application.py` (scan/heal use cases) ← `adapters/` (Claude Code transcript reader, generic JSONL reader, OpenAI phrasing) ← `cli.py`. `guard.py` is a standalone stdlib script.
 
-## v2 — root causes and recoveries (OFFGRID week 2)
+## v2 — root causes and recoveries (2026-10-06)
 Problem found on real logs: most repeated failures are *environment* mistakes that the command head hides (`echo === Done ===` fails in zsh; `timeout` does not exist on macOS) — and a rule must never block the fix the agent already found.
 
 ### Ubiquitous language (added)
@@ -53,10 +53,16 @@ Problem found on real logs: most repeated failures are *environment* mistakes th
 ### Success criteria (added, real data — aggregate only)
 - Holdout on the author's transcripts (learn from the earliest 70% of sessions, replay the last 30%): report Bash failures prevented and successful calls wrongly blocked; wrongly blocked ≤ 0.1%.
 
-## v3 — review fixes (OFFGRID week 2)
+## v3 — review fixes (2026-10-06)
 - Rules are structured (`kind: head | missing-command | zsh-equals | zsh-nomatch`) and matched per simple command by `scar_tissue/shell.py`, a linear-time tokenizer (quotes, escapes, heredocs, comments, `[[ ]]`/`(( ))`, loop context, `$(…)`/backticks, `bash -c` payloads parsed as bash). Probes in `tests/test_shell.py` are the acceptance criteria: `git push -f`, `git -C x push --force`, `FOO=1 timeout`, `nice/xargs/command timeout`, backticks are caught; `pgrep -f server` (one-shot), `echo do timeout 5`, `--include=\*.md`, `bash -c 'echo === x'` pass; pathological inputs parse in < 0.25 s.
 - A head habit learned only inside unbounded `while`/`until` loops is enforced only there (`context: loop`).
 - Corrections count only if the message shares a word (≥3 letters) with the call; polite phrases ("no worries", "never mind") never count.
 - Subagent transcripts are folded into their parent session; holdout and stats use Bash-only denominators; stats report per-rule matches split into exit ≠ 0 / silent, the failure cost (calls and seconds to the agent's fix, silent failures never fixed), demoted candidates, and a zsh trend.
 - Override: `# scar-ok: <reason>` works only when a rule matches, is logged with the rule id, at most 3 times per rule.
 - SessionStart reads `.scar/brief.md` written by `heal` (no rescan at startup). `scar report` = read-only markdown report with environment fixes.
+
+## v4 — second review + the silent-failure alarm (2026-10-06)
+- **Silent-failure alarm.** The same `guard.py` handles `PostToolUse`: if a Bash call exited 0 but the output contains a shell error line (`(eval):1: no matches found: …`, `zsh:3: … not found`, `bash: line 1: rg: command not found`), exit 2 with an explanation, so the agent re-runs instead of reading the empty output as a result. Needs no history. Given/When/Then: `grep -rn TODO . --include=*.md | head` with stdout `(eval):1: no matches found: --include=*.md` → exit 2, stderr names the line and says it did not run; output that merely mentions "command not found" without a shell prefix → exit 0.
+- Wrapper options per wrapper (`env -i` takes no value), `parallel`, `find -exec`, `eval '…'` payloads; substitutions inherit their loop; `git --git-dir x push`, `+refspec` = force; `noglob` disables the nomatch rule; only `==`-words trip zsh-equals (`=ls` is valid zsh).
+- A scar learned from human corrections cannot be overridden by the agent (`# scar-ok` is refused; ask the human).
+- Cost-benefit without a floor: any wrong block must be paid for by ≥ 20 stopped mistakes.

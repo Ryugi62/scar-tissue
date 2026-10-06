@@ -8,16 +8,17 @@
  "signatures_repeated_3plus": 321,
  "scars": 193,
  "root_cause_scars": 17,
- "guard_rules": 11,
- "demoted_by_self_validation": 7,
+ "guard_rules": 10,
+ "demoted_by_self_validation": 8,
  "already_guarded": 0,
  "recoveries_learned": 84,
  "bash_failures": 23520,
  "bash_failures_exit_nonzero": 23520,
- "bash_failures_matched_by_rules": 524,
- "bash_failures_matched_exit_nonzero": 524,
+ "bash_failures_matched_by_rules": 519,
+ "bash_failures_matched_by_2plus_rules": 0,
+ "bash_failures_matched_exit_nonzero": 519,
  "bash_successes": 31440,
- "bash_successes_blocked": 9,
+ "bash_successes_blocked": 8,
  "rules": [
   {
    "id": "bash-snapcraft-missing-command",
@@ -87,16 +88,6 @@
    "matched_exit_nonzero": 7,
    "matched_silent": 0,
    "successes_blocked": 0,
-   "recoveries": 0
-  },
-  {
-   "id": "bash-mysql-missing-command",
-   "signature": "Bash:mysql:missing-command",
-   "sessions": 4,
-   "matched_failures": 5,
-   "matched_exit_nonzero": 5,
-   "matched_silent": 0,
-   "successes_blocked": 1,
    "recoveries": 0
   },
   {
@@ -180,13 +171,6 @@
    "median_seconds_to_fix": null,
    "silent_never_fixed": 0
   },
-  "bash-mysql-missing-command": {
-   "matched": 5,
-   "recovered": 1,
-   "median_calls_to_fix": 5,
-   "median_seconds_to_fix": null,
-   "silent_never_fixed": 0
-  },
   "bash-next-issue-missing-command": {
    "matched": 4,
    "recovered": 0,
@@ -251,6 +235,13 @@
    "sessions": 4,
    "would_block_successes": 111,
    "blocks_own_fix": 2
+  },
+  {
+   "signature": "Bash:mysql:missing-command",
+   "failures": 6,
+   "sessions": 4,
+   "would_block_successes": 1,
+   "blocks_own_fix": 0
   },
   {
    "signature": "Bash:from:missing-command",
@@ -334,7 +325,7 @@
  ],
  "_meta": {
   "command": "scar stats rows.jsonl --format swe-agent",
-  "run": "2026-10-06 16:08 KST",
+  "run": "2026-10-06 16:33 KST",
   "data": "2,000 rows of huggingface.co/datasets/nebius/SWE-agent-trajectories (CC-BY-4.0): 100 rows at offsets 0, 4000, \u2026, 76000"
  }
 }

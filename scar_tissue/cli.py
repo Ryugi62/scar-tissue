@@ -70,11 +70,14 @@ def main(argv=None):
         entry = {"matcher": "Bash", "hooks": [{"type": "command", "command": f"python3 {guard}"}]}
         brief = {"hooks": [{"type": "command", "command": "cat .scar/brief.md 2>/dev/null || true"}]}   # written by `scar heal`
         if not o.yes:
-            print("would add to", o.settings, "\n  PreToolUse:", json.dumps(entry), "\n  SessionStart:", json.dumps(brief)); return 0
+            print("would add to", o.settings, "\n  PreToolUse + PostToolUse:", json.dumps(entry), "\n  SessionStart:", json.dumps(brief)); return 0
         s = json.load(open(o.settings)) if os.path.exists(o.settings) else {}
         pre = s.setdefault("hooks", {}).setdefault("PreToolUse", [])
         if not any(guard in json.dumps(x) for x in pre):
             pre.append(entry)
+        post = s["hooks"].setdefault("PostToolUse", [])   # silent-failure alarm: same script, PostToolUse event
+        if not any(guard in json.dumps(x) for x in post):
+            post.append(entry)
         ss = s["hooks"].setdefault("SessionStart", [])
         if not any(".scar/brief.md" in json.dumps(x) for x in ss):
             ss.append(brief)

@@ -39,7 +39,7 @@ REMEDY_MARKERS = {
     "time-limit-wrapper": r"(?:^|[;&|]\s*)(?:g?timeout\s+\d|perl\s+-e\s+['\"]alarm)",
     "self-match-safe-pattern": r"-f\s+['\"]?\[[^\]]+\]",
 }
-BENEFIT_RATIO = 20    # beyond 3 false blocks, a rule must stop ≥20 mistakes per success it blocks
+BENEFIT_RATIO = 20    # a rule must stop ≥20 mistakes for every successful call it would block
 RECOVERY_WINDOW = 6   # a recovery is a success with the same head within 6 calls after the failure
 
 
@@ -59,7 +59,8 @@ def root_cause(text: str):
     return None
 
 
-SHELL_ERR = re.compile(r"(?:\(eval\)|(?<![\w/.-])(?:zsh|bash)):\d+: [^\n]*")   # an error line printed by the shell itself
+SHELL_ERR = re.compile(r"(?:\(eval\)|(?<![\w/.-])(?:zsh|bash)):\d+: [^\n]*"          # zsh / Claude Code eval
+                       r"|(?:(?<=\n)|^)(?:/\S*/)?(?:ba)?sh: line \d+: [^\n]*", re.M)       # bash: line 1: rg: command not found
 
 
 @lru_cache(maxsize=65536)
@@ -255,8 +256,8 @@ def _same_task(failed_cmd: str, ok_cmd: str, key: str) -> bool:
 
 def validate_against_history(scars, events, max_rate=0.005, max_count=3):
     """Self-validation: replay every candidate rule against the agent's own SUCCESSFUL calls.
-    A rule is demoted to advice if it would have blocked normal work more than max_count times AND more than once per
-    BENEFIT_RATIO mistakes it stops, or more than max_rate of all successful calls.
+    A rule is demoted to advice if it would block normal work more than once per BENEFIT_RATIO mistakes it stops, or more
+    than max_rate of all successful calls (max_count is kept for API compatibility).
     Fix-safety: a rule that would block one of the agent's own recoveries is demoted too."""
     corrected = {id(c) for sc in scars for c in sc.corrected_calls}   # calls the human corrected are not "normal work"
     ok = {}
@@ -273,7 +274,7 @@ def validate_against_history(scars, events, max_rate=0.005, max_count=3):
         s.false_blocks = hits
         s.blocks_own_fix = sum(1 for r in s.recoveries if rule_matches(rule, s.tool, {"command": r.command}))
         benefit = len(s.failures) + len(s.corrections)   # mistakes the rule would have stopped
-        if (hits > max_count and hits * BENEFIT_RATIO > benefit) or hits / n > max_rate or s.blocks_own_fix:
+        if (hits > 0 and hits * BENEFIT_RATIO > benefit) or hits / n > max_rate or s.blocks_own_fix:
             s.demoted = True
         report.append((s.signature, hits, n, getattr(s, "demoted", False)))
     return report
@@ -361,8 +362,13 @@ def compile_rule(scar: Scar, principle: str) -> dict:
 
 FLAG_ALIASES = {"--force": {"-f"}, "-f": {"--force"}, "--recursive": {"-r", "-R"}, "-r": {"--recursive"}}
 WRAPPERS = {"nice", "nohup", "time", "command", "builtin", "exec", "sudo", "env", "xargs", "timeout", "gtimeout", "stdbuf",
-            "caffeinate", "noglob", "doas"}
-_VALUE_OPTS = {"-n", "-I", "-L", "-P", "-s", "-u", "-k", "-C", "-c", "-o", "-e", "-i"}
+            "caffeinate", "noglob", "doas", "parallel", "nocorrect"}
+_WRAPPER_VALUE_OPTS = {   # options that take a separate value, per wrapper (env -i takes none; env -u NAME takes one)
+    "env": {"-u", "-C", "-S"}, "nice": {"-n"}, "xargs": {"-I", "-n", "-L", "-P", "-s", "-d", "-E", "-a"},
+    "timeout": {"-s", "-k"}, "gtimeout": {"-s", "-k"}, "sudo": {"-u", "-g", "-C", "-h"}, "doas": {"-u", "-C"},
+    "parallel": {"-j", "-S", "--jobs"}, "caffeinate": {"-t", "-w"}}
+_GIT_VALUE_OPTS = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--super-prefix", "--config-env"}
+FLAG_SHAPES = {"--force": r"^\+\S"}   # git push origin +main is a force push
 
 
 def _chain(words: tuple) -> tuple[list, int]:
@@ -371,9 +377,9 @@ def _chain(words: tuple) -> tuple[list, int]:
     while i < len(words) and re.match(r"^[A-Za-z_]\w*=", words[i]):
         i += 1
     while i < len(words) and words[i].rsplit("/", 1)[-1] in WRAPPERS:
-        chain.append(words[i].rsplit("/", 1)[-1]); i += 1
-        while i < len(words) and (words[i].startswith("-") or re.match(r"^(\d+[smhd]?|[A-Za-z_]\w*=.*)$", words[i])):
-            i += 2 if words[i] in _VALUE_OPTS else 1
+        w = words[i].rsplit("/", 1)[-1]; chain.append(w); i += 1
+        while i < len(words) and (words[i].startswith("-") or re.match(r"^(\d+(\.\d+)?[smhd]?|[A-Za-z_]\w*=.*|:::)$", words[i])):
+            i += 2 if words[i] in _WRAPPER_VALUE_OPTS.get(w, ()) else 1
     return chain, i
 
 
@@ -384,6 +390,8 @@ def _has_flag(flag: str, args) -> bool:
         if a in names or any(a.startswith(n + "=") for n in names if n.startswith("--")):
             return True
         if short and re.match(r"^-[A-Za-z]{2,}$", a) and short & set(a[1:]):
+            return True
+        if flag in FLAG_SHAPES and re.match(FLAG_SHAPES[flag], a):
             return True
     return False
 
@@ -401,7 +409,7 @@ def _head_hit(rule: dict, c) -> bool:
         else:                                            # subcommand after global options: git -C dir push
             j = 0
             while j < len(args) and args[j].startswith("-"):
-                j += 2 if args[j] in _VALUE_OPTS else 1
+                j += 2 if args[j] in _GIT_VALUE_OPTS else 1
             if j >= len(args) or args[j] != sub:
                 return False
             args = args[j + 1:]
@@ -418,7 +426,7 @@ def _command_hits(rule: dict, c) -> bool:
         chain, k = _chain(c.words)
         return rule["name"] in chain or (k < len(c.words) and c.words[k].rsplit("/", 1)[-1] == rule["name"])
     if kind in ("zsh-equals", "zsh-nomatch"):
-        if c.shell != "zsh" or c.test:
+        if c.shell != "zsh" or c.test or "noglob" in _chain(c.words)[0]:
             return False
         if kind == "zsh-equals":
             return any(c.unquoted_equals_word(i) for i in range(len(c.words)))
